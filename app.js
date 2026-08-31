@@ -149,28 +149,73 @@ let FIN = {};
 let FILTROS = { vendedor: '', origem: '', busca: '' };
 let VIEW = 'dashboard';
 
-function load() {
-  let raw = null;
-  try { raw = localStorage.getItem(STORAGE_KEY); } catch (e) {}
-  if (raw) {
-    try { LEADS = JSON.parse(raw); } catch (e) { LEADS = seed(); save(); }
-  } else {
-    LEADS = seed(); save();
+/* ---------------- Persistência resiliente ----------------
+   Um único ponto de escrita que NÃO engole falhas em silêncio:
+   avisa o usuário quando o navegador recusa a gravação (cota
+   cheia, aba anônima, storage bloqueado) para que ele exporte
+   um backup antes de perder dados. */
+let STORAGE_OK = true;       // false = a última escrita falhou
+let STORAGE_WARNED = false;  // evita repetir o toast a cada tecla
+
+function storageWritable() {
+  try {
+    const k = '__pp_test__';
+    localStorage.setItem(k, '1');
+    localStorage.removeItem(k);
+    return true;
+  } catch (e) { return false; }
+}
+function readStore(key) {
+  try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+function persist(key, value) {
+  let payload;
+  try { payload = JSON.stringify(value); } catch (e) { return false; }
+  try {
+    localStorage.setItem(key, payload);
+    if (!STORAGE_OK) { STORAGE_OK = true; STORAGE_WARNED = false; } // recuperou
+    return true;
+  } catch (e) {
+    STORAGE_OK = false;
+    const quota = e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014);
+    if (!STORAGE_WARNED && typeof toast === 'function') {
+      STORAGE_WARNED = true;
+      toast(quota
+        ? 'Armazenamento cheio: as últimas mudanças podem não ter sido salvas. Exporte um backup e libere espaço.'
+        : 'Não foi possível salvar neste navegador (aba anônima ou storage bloqueado). Exporte um backup para não perder dados.',
+        true);
+    }
+    return false;
   }
 }
-function save() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(LEADS)); } catch (e) {} }
+
+function load() {
+  const raw = readStore(STORAGE_KEY);
+  if (raw != null) {
+    try {
+      const parsed = JSON.parse(raw);
+      LEADS = Array.isArray(parsed) ? parsed : seed();   // valida o formato
+    } catch (e) { LEADS = seed(); }
+  } else {
+    LEADS = seed();
+  }
+  save();
+}
+function save() { return persist(STORAGE_KEY, LEADS); }
 function loadObject(key) {
-  let raw = null;
-  try { raw = localStorage.getItem(key); } catch (e) {}
+  const raw = readStore(key);
   if (!raw) return {};
-  try { return JSON.parse(raw) || {}; } catch (e) { return {}; }
+  try {
+    const parsed = JSON.parse(raw);
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+  } catch (e) { return {}; }
 }
 function loadOps() {
   OBRAS = loadObject(OBRAS_KEY);
   FIN = loadObject(FIN_KEY);
 }
-function saveObras() { try { localStorage.setItem(OBRAS_KEY, JSON.stringify(OBRAS)); } catch (e) {} }
-function saveFin() { try { localStorage.setItem(FIN_KEY, JSON.stringify(FIN)); } catch (e) {} }
+function saveObras() { return persist(OBRAS_KEY, OBRAS); }
+function saveFin() { return persist(FIN_KEY, FIN); }
 function replaceArray(target, items) {
   target.splice(0, target.length, ...items);
 }
@@ -218,10 +263,7 @@ function loadConfig() {
   };
   applyConfig(cfg);
 }
-function saveConfig() {
-  const cfg = defaultConfig();
-  try { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); } catch (e) {}
-}
+function saveConfig() { return persist(CONFIG_KEY, defaultConfig()); }
 
 function filtrados() {
   const b = FILTROS.busca.trim().toLowerCase();
@@ -964,14 +1006,14 @@ function renderRelatorios() {
    RENDER — CONFIGURAÇÕES
    ============================================================ */
 function configInput(id, value, type = 'text', extra = '') {
-  return `<input id="${id}" type="${type}" value="${esc(String(value ?? ''))}" ${extra}>`;
+  return `<input class="cfg-inp${type === 'color' ? ' cfg-inp-color' : ''}" id="${id}" type="${type}" value="${esc(String(value ?? ''))}" ${extra}>`;
 }
 function renderConfigTable(title, hint, headers, rows, addHtml) {
-  return `<section class="config-card">
-    <div class="config-head"><h2>${title}</h2><span>${hint}</span></div>
-    <div class="config-table-wrap">
-      <table class="config-table">
-        <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}<th></th><th></th></tr></thead>
+  return `<section class="report-card cfg-card">
+    <div class="report-head"><h2>${title}</h2><span>${hint}</span></div>
+    <div class="cfg-table-wrap">
+      <table class="tbl cfg-tbl">
+        <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}<th class="cfg-act-col" colspan="2">Ações</th></tr></thead>
         <tbody>${rows}${addHtml}</tbody>
       </table>
     </div>
@@ -984,7 +1026,7 @@ function renderConfiguracoes() {
     <td><button class="mini-btn" title="Salvar modelo" onclick="App.saveModelo(${i})">${svgWrap('<path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>')}</button></td>
     <td><button class="mini-btn danger" title="Remover modelo" onclick="App.delModelo(${i})">${svgWrap('<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" stroke-linecap="round" stroke-linejoin="round"/>')}</button></td>
   </tr>`).join('');
-  const modeloAdd = `<tr class="add-row">
+  const modeloAdd = `<tr class="cfg-add-row">
     <td>${configInput('cfg_mod_nome_new', '', 'text', 'placeholder="Novo modelo"')}</td>
     <td>${configInput('cfg_mod_base_new', '', 'number', 'min="0" step="100" placeholder="Preço base"')}</td>
     <td colspan="2"><button class="btn btn-primary btn-sm" onclick="App.addModelo()">Adicionar</button></td>
@@ -999,7 +1041,7 @@ function renderConfiguracoes() {
     <td><button class="mini-btn" title="Salvar adicional" onclick="App.saveAdicional(${i})">${svgWrap('<path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>')}</button></td>
     <td><button class="mini-btn danger" title="Remover adicional" onclick="App.delAdicional(${i})">${svgWrap('<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" stroke-linecap="round" stroke-linejoin="round"/>')}</button></td>
   </tr>`).join('');
-  const adicionalAdd = `<tr class="add-row">
+  const adicionalAdd = `<tr class="cfg-add-row">
     <td>${configInput('cfg_ad_nome_new', '', 'text', 'placeholder="Novo adicional"')}</td>
     <td>${configInput('cfg_ad_valor_new', '', 'number', 'min="0" step="50" placeholder="Valor"')}</td>
     <td>${configInput('cfg_ad_un_new', '', 'text', 'placeholder="m², m..."')}</td>
@@ -1009,14 +1051,14 @@ function renderConfiguracoes() {
 
   const vendedorRows = VENDEDORES.map((v, i) => `<tr>
     <td>${configInput(`cfg_v_nome_${i}`, v.nome)}</td>
-    <td><div class="color-field">${configInput(`cfg_v_cor_${i}`, v.cor, 'color')}<span>${esc(v.cor)}</span></div></td>
+    <td><div class="cfg-color-field">${configInput(`cfg_v_cor_${i}`, v.cor, 'color')}<span>${esc(v.cor)}</span></div></td>
     <td>${configInput(`cfg_v_meta_${i}`, v.meta ?? META_PADRAO, 'number', 'min="0" step="10000"')}</td>
     <td><button class="mini-btn" title="Salvar vendedor" onclick="App.saveVendedor(${i})">${svgWrap('<path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>')}</button></td>
     <td><button class="mini-btn danger" title="Remover vendedor" onclick="App.delVendedor(${i})">${svgWrap('<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" stroke-linecap="round" stroke-linejoin="round"/>')}</button></td>
   </tr>`).join('');
-  const vendedorAdd = `<tr class="add-row">
+  const vendedorAdd = `<tr class="cfg-add-row">
     <td>${configInput('cfg_v_nome_new', '', 'text', 'placeholder="Novo vendedor"')}</td>
-    <td><div class="color-field">${configInput('cfg_v_cor_new', '#0ea5a4', 'color')}<span>#0ea5a4</span></div></td>
+    <td><div class="cfg-color-field">${configInput('cfg_v_cor_new', '#0ea5a4', 'color')}<span>#0ea5a4</span></div></td>
     <td>${configInput('cfg_v_meta_new', META_PADRAO, 'number', 'min="0" step="10000"')}</td>
     <td colspan="2"><button class="btn btn-primary btn-sm" onclick="App.addVendedor()">Adicionar</button></td>
   </tr>`;
@@ -1026,31 +1068,58 @@ function renderConfiguracoes() {
     <td><button class="mini-btn" title="Salvar equipe" onclick="App.saveEquipe(${i})">${svgWrap('<path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>')}</button></td>
     <td><button class="mini-btn danger" title="Remover equipe" onclick="App.delEquipe(${i})">${svgWrap('<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" stroke-linecap="round" stroke-linejoin="round"/>')}</button></td>
   </tr>`).join('');
-  const equipeAdd = `<tr class="add-row">
+  const equipeAdd = `<tr class="cfg-add-row">
     <td>${configInput('cfg_eq_nome_new', '', 'text', 'placeholder="Nova equipe"')}</td>
     <td colspan="2"><button class="btn btn-primary btn-sm" onclick="App.addEquipe()">Adicionar</button></td>
   </tr>`;
 
+  const adicionaisCount = adicionais.length;
+  const metaTotal = VENDEDORES.reduce((s, v) => s + (v.meta ?? META_PADRAO), 0);
+
+  const kpi = (icon, label, val, foot) => `
+    <div class="kpi">
+      <div class="k-top">${svgWrap(icon)} ${label}</div>
+      <div class="k-val num">${val}</div>
+      <div class="k-foot">${foot}</div>
+    </div>`;
+
   return `<div style="padding:24px 28px 32px">
-    <section class="config-card" style="margin-bottom:16px">
-      <div class="config-head"><h2>Backup &amp; Restauração</h2><span>exporte ou importe todos os dados</span></div>
-      <div class="backup-box">
-        <p>Todos os dados do sistema ficam salvos apenas neste navegador. Exporte um backup com frequência (e antes de limpar o navegador ou trocar de computador) para não perder nada. A importação substitui os dados atuais.</p>
-        <div class="backup-actions">
-          <button class="btn btn-primary btn-sm" onclick="App.exportarBackup()">${svgWrap('<path d="M12 3v10m0 0l-3.5-3.5M12 13l3.5-3.5M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke-linecap="round" stroke-linejoin="round"/>')} Exportar backup (.json)</button>
-          <label class="btn btn-ghost btn-sm">
-            ${svgWrap('<path d="M12 13V3m0 0L8.5 6.5M12 3l3.5 3.5M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke-linecap="round" stroke-linejoin="round"/>')} Importar backup
-            <input type="file" accept="application/json,.json" style="display:none" onchange="App.importarBackup(this)">
-          </label>
-        </div>
-      </div>
-    </section>
-    <div class="config-grid">
+    <div class="kpis">
+      ${kpi('<path d="M8 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3" stroke-linecap="round"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M8 12h8M8 16h5" stroke-linecap="round"/>', 'Modelos', MODELOS.length, 'no catálogo')}
+      ${kpi('<path d="M12 5v14M5 12h14" stroke-linecap="round"/>', 'Adicionais', adicionaisCount, 'opcionais da proposta')}
+      ${kpi('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.8" stroke-linecap="round"/>', 'Vendedores', VENDEDORES.length, 'no time comercial')}
+      ${kpi('<path d="M3 20h18M5 20V9l7-5 7 5v11M9 20v-6h6v6" stroke-linecap="round" stroke-linejoin="round"/>', 'Equipes', EQUIPES.length, 'de instalação')}
+      ${kpi('<path d="M3 3v18h18M7 14l3-3 3 3 5-6" stroke-linecap="round" stroke-linejoin="round"/>', 'Meta do time', moneyK(metaTotal), 'somatório mensal')}
+    </div>
+
+    <div class="funnel-head">
+      <h2>Catálogo &amp; Operação</h2>
+      <div class="client-hint">Modelos, adicionais, vendedores e equipes usados em todo o sistema</div>
+    </div>
+
+    <div class="report-grid cfg-grid">
       ${renderConfigTable('Modelos de piscina', 'catálogo e preço base', ['Modelo', 'Preço base'], modeloRows, modeloAdd)}
       ${renderConfigTable('Adicionais', 'opcionais da proposta', ['Item', 'Valor', 'Unidade', 'Qtd. padrão'], adicionalRows, adicionalAdd)}
       ${renderConfigTable('Vendedores', 'responsáveis e metas mensais', ['Nome', 'Cor', 'Meta mensal (R$)'], vendedorRows, vendedorAdd)}
       ${renderConfigTable('Equipes', 'operação e instalação', ['Equipe'], equipeRows, equipeAdd)}
     </div>
+
+    <div class="funnel-head" style="margin-top:24px">
+      <h2>Dados do sistema</h2>
+      <div class="client-hint">Backup e restauração de todos os registros</div>
+    </div>
+
+    <section class="report-card cfg-backup">
+      <div class="report-head"><h2>Backup &amp; Restauração</h2><span>exporte ou importe tudo</span></div>
+      <p class="cfg-backup-text">Todos os dados do sistema ficam salvos apenas neste navegador. Exporte um backup com frequência (e antes de limpar o navegador ou trocar de computador) para não perder nada. A importação substitui os dados atuais.</p>
+      <div class="cfg-backup-actions">
+        <button class="btn btn-primary btn-sm" onclick="App.exportarBackup()">${svgWrap('<path d="M12 3v10m0 0l-3.5-3.5M12 13l3.5-3.5M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke-linecap="round" stroke-linejoin="round"/>')} Exportar backup (.json)</button>
+        <label class="btn btn-ghost btn-sm">
+          ${svgWrap('<path d="M12 13V3m0 0L8.5 6.5M12 3l3.5 3.5M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke-linecap="round" stroke-linejoin="round"/>')} Importar backup
+          <input type="file" accept="application/json,.json" style="display:none" onchange="App.importarBackup(this)">
+        </label>
+      </div>
+    </section>
   </div>`;
 }
 
@@ -1989,6 +2058,12 @@ function setFiltro(k, v) { FILTROS[k] = v; render(); }
    Bootstrap
    ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
+  // Se o navegador não deixa gravar (aba anônima/storage bloqueado),
+  // avisa uma vez logo na entrada — o app funciona, mas nada é salvo.
+  if (!storageWritable()) {
+    STORAGE_OK = false; STORAGE_WARNED = true;
+    setTimeout(() => toast('Este navegador não está salvando dados (aba anônima?). Suas alterações serão perdidas ao fechar — exporte um backup.', true), 400);
+  }
   loadConfig();
   load();
   loadOps();

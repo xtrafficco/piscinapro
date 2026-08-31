@@ -736,11 +736,48 @@ h1,h2,h3,h4 { font-weight: 600; color: var(--t-strong); line-height: 1.15; }
 .pv-btn { display: inline-flex; align-items: center; gap: 8px; }
 .pv-btn svg { width: 16px; height: 16px; }
 
-/* Backup & Restauração (Configurações) */
-.backup-box p { font-size: 13px; color: var(--t-muted); margin: 0 0 14px; max-width: 640px; line-height: 1.6; }
-.backup-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-.backup-actions .btn svg { width: 16px; height: 16px; }
-.backup-actions label.btn { cursor: pointer; }
+/* ============================================================
+   CONFIGURAÇÕES — catálogo, operação e backup
+   (reaproveita .kpis, .funnel-head, .report-card, .tbl)
+   ============================================================ */
+.cfg-grid { align-items: start; }                 /* cada cartão com sua própria altura */
+
+.cfg-table-wrap { overflow-x: auto; margin-top: 2px; }
+.cfg-tbl { width: 100%; min-width: 0; }           /* dentro do cartão: sem largura mínima */
+.cfg-tbl th { position: static; padding: 9px 12px; background: transparent; border-bottom: 1px solid var(--line); }
+.cfg-tbl td { padding: 8px 12px; vertical-align: middle; }
+.cfg-tbl tbody tr { cursor: default; }
+.cfg-tbl tbody tr:hover { background: transparent; }
+.cfg-tbl th:first-child, .cfg-tbl td:first-child { padding-left: 2px; }
+.cfg-tbl .cfg-act-col { text-align: right; padding-right: 2px; }
+.cfg-tbl td:has(> .mini-btn) { width: 40px; padding-left: 3px; padding-right: 3px; text-align: center; }
+
+/* campos editáveis na mesma linguagem dos .field */
+.cfg-inp {
+  width: 100%; height: 38px; border: 1px solid var(--line); border-radius: 9px; padding: 0 11px;
+  background: var(--surface-2); outline: none; font-weight: 600; font-size: 13px; color: var(--t-strong);
+  transition: border .15s, box-shadow .15s;
+}
+.cfg-inp:focus { border-color: var(--water-400); box-shadow: 0 0 0 3px var(--water-050); background: var(--surface); }
+.cfg-inp::placeholder { color: var(--t-faint); font-weight: 500; }
+.cfg-inp[type=number] { text-align: right; }
+
+/* seletor de cor do vendedor + código hex */
+.cfg-inp-color { width: 40px; height: 38px; min-width: 40px; padding: 3px; cursor: pointer; border-radius: 9px; }
+.cfg-color-field { display: flex; align-items: center; gap: 9px; }
+.cfg-color-field span { font-size: 12px; font-weight: 700; color: var(--t-muted); font-variant-numeric: tabular-nums; text-transform: uppercase; }
+
+/* linha "adicionar novo" levemente destacada */
+.cfg-add-row td { background: var(--surface-2); }
+.cfg-add-row td:first-child { border-bottom-left-radius: 10px; }
+.cfg-add-row td:last-child { border-bottom-right-radius: 10px; }
+.cfg-add-row .btn-sm { width: 100%; }
+
+/* Backup & Restauração */
+.cfg-backup-text { font-size: 13px; color: var(--t-muted); margin: 2px 0 16px; max-width: 720px; line-height: 1.6; }
+.cfg-backup-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.cfg-backup-actions .btn svg { width: 16px; height: 16px; }
+.cfg-backup-actions label.btn { cursor: pointer; }
 
 /* Respeita quem prefere menos movimento (acessibilidade / vestibular) */
 @media (prefers-reduced-motion: reduce) {

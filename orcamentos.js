@@ -53,13 +53,25 @@ let draft = null;
 let seqBase = 143;
 
 function orcLoad() {
-  let raw = null;
-  try { raw = localStorage.getItem(ORC_KEY); } catch (e) {}
-  if (raw) { try { ORC = JSON.parse(raw); } catch (e) { ORC = orcSeed(); orcSave(); } }
-  else { ORC = orcSeed(); orcSave(); }
+  // usa o leitor resiliente do app.js quando disponível
+  const raw = (typeof readStore === 'function') ? readStore(ORC_KEY)
+    : (() => { try { return localStorage.getItem(ORC_KEY); } catch (e) { return null; } })();
+  if (raw != null) {
+    try {
+      const parsed = JSON.parse(raw);
+      ORC = Array.isArray(parsed) ? parsed : orcSeed();   // valida o formato
+    } catch (e) { ORC = orcSeed(); }
+  } else {
+    ORC = orcSeed();
+  }
+  orcSave();
   seqBase = 143 + ORC.length;
 }
-function orcSave() { try { localStorage.setItem(ORC_KEY, JSON.stringify(ORC)); } catch (e) {} }
+// escreve pelo persist() central (avisa em falha); fallback direto se ainda não carregou
+function orcSave() {
+  if (typeof persist === 'function') return persist(ORC_KEY, ORC);
+  try { localStorage.setItem(ORC_KEY, JSON.stringify(ORC)); return true; } catch (e) { return false; }
+}
 
 function orcSeed() {
   const iso = d => new Date(Date.now() - d * 86400000).toISOString();
