@@ -68,7 +68,13 @@ const CONFIG_KEY = 'piscinapro_config_v1';
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 const money = v => BRL.format(v || 0);
 const moneyK = v => (v >= 1000 ? 'R$ ' + (v / 1000).toFixed(v >= 100000 ? 0 : 1).replace('.', ',') + ' mil' : money(v));
-const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+// UUID v4 quando disponível: alinha os ids gerados no app com as PKs (uuid) do Supabase.
+const uid = () => (globalThis.crypto && crypto.randomUUID)
+  ? crypto.randomUUID()
+  : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
 // escapa TODOS os caracteres sensíveis, inclusive aspas simples (`'`) e crase (`` ` ``),
 // deixando o texto seguro tanto em conteúdo quanto em atributos com aspas simples/duplas.
 const ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' };
@@ -174,6 +180,11 @@ function persist(key, value) {
   try {
     localStorage.setItem(key, payload);
     if (!STORAGE_OK) { STORAGE_OK = true; STORAGE_WARNED = false; } // recuperou
+    // Write-through para o Supabase (quando conectado). O cache local acima
+    // segue como fallback offline; o Supa reconcilia a tabela correspondente.
+    if (window.Supa && typeof window.Supa.onPersist === 'function') {
+      try { window.Supa.onPersist(key); } catch (e) { /* nunca quebra a gravação local */ }
+    }
     return true;
   } catch (e) {
     STORAGE_OK = false;
@@ -998,8 +1009,36 @@ function renderRelatorios() {
           }).join('')}
         </div>
       </section>
+      ${renderMetasServidor()}
     </div>
   </div>`;
+}
+
+/* Card de metas por vendedor calculado NO SERVIDOR (view vw_metas_vendedor).
+   Preenchido por supabase.js em window.__supaViews; some graciosamente offline. */
+function renderMetasServidor() {
+  const vw = (typeof window !== 'undefined' && window.__supaViews) ? window.__supaViews : null;
+  const metas = (vw && Array.isArray(vw.metas)) ? vw.metas.slice() : [];
+  const head = `<div class="report-head"><h2>Metas por vendedor <span class="live-tag">● servidor</span></h2><span>realizado / meta</span></div>`;
+  if (!metas.length) {
+    return `<section class="report-card"><div class="report-head"><h2>Metas por vendedor <span class="live-tag off">● servidor</span></h2><span>realizado / meta</span></div>
+      <div class="client-empty-note">Disponível ao conectar no Supabase (dados calculados no banco).</div></section>`;
+  }
+  metas.sort((a, b) => (b.realizado || 0) - (a.realizado || 0));
+  const rows = metas.map(m => {
+    const meta = Number(m.meta) || 0;
+    const real = Number(m.realizado) || 0;
+    const pipe = Number(m.pipeline) || 0;
+    const p = meta > 0 ? Math.min(100, Math.round(real / meta * 100)) : (real > 0 ? 100 : 0);
+    const cor = m.cor || '#0ea5a4';
+    return `<div class="meta-row">
+      <div class="meta-top"><span class="meta-nome"><span class="col-dot" style="background:${cor}"></span>${esc(m.nome || '—')}</span>
+        <span class="meta-pct">${p}%</span></div>
+      <div class="meta-bar"><div class="meta-fill" style="width:${p}%;background:${cor}"></div></div>
+      <div class="meta-foot">${moneyK(real)} de ${moneyK(meta)} · pipeline ${moneyK(pipe)} · ${m.leads_ativos || 0} ativos</div>
+    </div>`;
+  }).join('');
+  return `<section class="report-card">${head}<div class="meta-list">${rows}</div></section>`;
 }
 
 /* ============================================================
@@ -2070,6 +2109,10 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.orcInit) window.orcInit();
   render();
 
+  // Sobe a camada Supabase: mostra o portão de login, hidrata com os dados
+  // reais do banco e liga o write-through. Até lá, o app roda pelo cache local.
+  if (window.Supa && typeof window.Supa.boot === 'function') window.Supa.boot();
+
   document.getElementById('nav').addEventListener('click', e => {
     const item = e.target.closest('.nav-item'); if (!item) return;
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -2119,4 +2162,6 @@ window.App = {
   exportarBackup, importarBackup,
   // Geral
   closeAll, toast, go, setFiltro, keyActivate, verOrcamento,
+  // Supabase
+  logout: () => { if (window.Supa && window.Supa.logout) window.Supa.logout(); },
 };

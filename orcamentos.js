@@ -453,7 +453,9 @@ function propostaHTML(o) {
   </body></html>`;
 }
 
+let propostaAtual = null;
 function abrirProposta(o) {
+  propostaAtual = o;
   let ov = document.getElementById('propostaOverlay');
   if (!ov) {
     ov = document.createElement('div');
@@ -464,6 +466,7 @@ function abrirProposta(o) {
     ov.innerHTML = `<div class="pv-bar">
         <div class="pv-title">Proposta comercial</div>
         <button class="pv-btn ghost" onclick="Orc.fecharProposta()">Fechar</button>
+        <button class="pv-btn whats" onclick="Orc.whatsProposta()">${SVG('<path d="M3 21l1.7-4.9A8 8 0 1 1 8 20.3L3 21z" stroke-linejoin="round" stroke-linecap="round"/>')} WhatsApp</button>
         <button class="pv-btn" onclick="Orc.printProposta()">${SVG('<path d="M12 3v10m0 0l-3.5-3.5M12 13l3.5-3.5M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke-linecap="round" stroke-linejoin="round"/>')} Imprimir / Salvar PDF</button>
       </div>
       <div class="pv-body"><iframe id="propostaFrame" title="Proposta"></iframe></div>`;
@@ -471,6 +474,17 @@ function abrirProposta(o) {
   }
   document.getElementById('propostaFrame').srcdoc = propostaHTML(o);
   ov.classList.add('open');
+}
+
+// Abre o WhatsApp do cliente com uma mensagem pronta referenciando a proposta.
+// (só abre o chat com o texto — quem envia é o vendedor.)
+function whatsProposta() {
+  const o = propostaAtual; if (!o) return;
+  const tel = (typeof phoneKey === 'function') ? phoneKey(o.cliente.telefone) : (o.cliente.telefone || '').replace(/\D/g, '');
+  const total = money(calc(o).total);
+  const msg = `Olá ${o.cliente.nome || ''}! Segue a proposta PiscinaPro Nº ${o.numero} da sua piscina ${o.modelo} — total ${total}. Qualquer dúvida, estou à disposição! 🏊`;
+  const base = tel ? `https://wa.me/55${tel}` : 'https://wa.me/';
+  window.open(`${base}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
 }
 
 /* ============================================================
@@ -562,6 +576,7 @@ const Orc = {
   imprimir(id) { const o = ORC.find(x => x.id === id); if (o) abrirProposta(o); },
   fecharProposta() { const ov = document.getElementById('propostaOverlay'); if (ov) ov.classList.remove('open'); },
   printProposta() { const f = document.getElementById('propostaFrame'); if (f && f.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } },
+  whatsProposta() { whatsProposta(); },
 
   setStatus(id, st) {
     const o = ORC.find(x => x.id === id); if (!o) return;
