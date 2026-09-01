@@ -40,8 +40,12 @@
     refreshTimer: null,
     // Follow-ups
     tarefas: [],        // linhas de public.tarefas
+    atividade: [],      // últimas linhas de public.auditoria
   };
   const STALE_DIAS = 5; // lead "parado" sem interação há N dias
+  const OWNER_EMAIL = 'ramon.sfarias@hotmail.com'; // vira admin no 1º login
+  // Chave VAPID pública (é pública por definição) — pareia com a privada no app_config/Edge Function.
+  const VAPID_PUBLIC = 'BM1aqPtsxaBWrkAESU1hBv8e1bGFR6Fcaw__ZM04JI3n6-93zLxr76pKMJBQnPE3a4Ps_GsFUJabFPRkG-WEZkQ';
 
   /* ------------------------------------------------------------------ utils */
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -108,12 +112,21 @@
     setPill('syncing', 'Sincronizando…');
     try {
       await loadIdentity();
+      // Drena a fila offline ANTES de hidratar: empurra as edições locais
+      // pendentes pro servidor pra não serem sobrescritas pela hidratação.
+      const pend = loadDirty();
+      if (pend.length) {
+        pend.forEach(k => state.dirty.add(k));
+        try { await refreshMaps(); } catch (e) {}
+        for (const k of pend) { try { await runSync(k); } catch (e) {} }
+      }
       await hydrate();
       state.online = true;
       setPill('online', 'Online · Supabase');
       subscribeRealtime();
       renderIdentity();
       renderBell();
+      if (remindersOn()) { startReminderLoop(); checkReminders(); subscribePush(); }
       // reprocessa o que ficou pendente enquanto estava offline
       if (state.dirty.size) { const ks = [...state.dirty]; state.dirty.clear(); ks.forEach(k => scheduleSync(k, 0)); }
     } catch (e) {
@@ -133,9 +146,38 @@
       state.perfil = perfil;
     } else {
       const nome = (user.email || '').split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      const { data: novo } = await sb.from('perfis').insert({ id: user.id, nome }).select('*').maybeSingle();
-      state.perfil = novo || { id: user.id, nome, vendedor_id: null, papel: 'consultor' };
+      // 1º usuário do sistema (ou o dono) entra como admin; demais como consultor.
+      const { count } = await sb.from('perfis').select('id', { count: 'exact', head: true });
+      const dono = (user.email || '').toLowerCase() === OWNER_EMAIL;
+      const papel = (dono || (count || 0) === 0) ? 'admin' : 'consultor';
+      const { data: novo } = await sb.from('perfis').insert({ id: user.id, nome, papel }).select('*').maybeSingle();
+      state.perfil = novo || { id: user.id, nome, vendedor_id: null, papel };
     }
+  }
+  function isAdmin() {
+    // UX de time (a fronteira real é o RLS). Offline/sem perfil → libera (dono local).
+    return !state.ready || !state.perfil || state.perfil.papel === 'admin';
+  }
+  function papel() { return (state.perfil && state.perfil.papel) || null; }
+
+  // Auditoria: registra quem mudou o quê (fire-and-forget; nunca quebra o fluxo)
+  async function logAudit(entidade, entidadeId, acao, resumo) {
+    if (!state.ready || !sb) return;
+    try {
+      state.muteUntil = Date.now() + 1500;
+      await sb.from('auditoria').insert({
+        user_id: state.user && state.user.id, ator: displayName(),
+        entidade, entidade_id: entidadeId != null ? String(entidadeId) : null,
+        acao, resumo: resumo || null,
+      });
+    } catch (e) { /* auditoria é best-effort */ }
+  }
+  async function refreshAtividade() {
+    try {
+      const { data } = await sb.from('auditoria').select('*').order('quando', { ascending: false }).limit(12);
+      state.atividade = data || [];
+      renderBell();
+    } catch (e) { /* noop */ }
   }
 
   function meuVendedorNome() {
@@ -191,7 +233,7 @@
   /* ------------------------------------------------------------------ hidratação (banco -> memória) */
   async function fetchAll() {
     const q = (t, sel) => sb.from(t).select(sel);
-    const [modelos, vendedores, equipes, adicionais, leads, orcamentos, obras, financeiro, tarefas, vw_metas_vendedor, vw_funil_resumo] = await Promise.all([
+    const [modelos, vendedores, equipes, adicionais, leads, orcamentos, obras, financeiro, tarefas, vw_metas_vendedor, vw_funil_resumo, auditoria] = await Promise.all([
       q('modelos', '*'),
       q('vendedores', '*'),
       q('equipes', '*'),
@@ -203,6 +245,7 @@
       q('tarefas', '*'),
       q('vw_metas_vendedor', '*'),
       q('vw_funil_resumo', '*'),
+      sb.from('auditoria').select('*').order('quando', { ascending: false }).limit(12),
     ]);
     for (const r of [modelos, vendedores, equipes, adicionais, leads, orcamentos, obras, financeiro, tarefas]) {
       if (r.error) throw r.error;
@@ -214,6 +257,7 @@
       // views de relatório (numeração feita no servidor). Não bloqueiam a hidratação se falharem.
       vwMetas: (vw_metas_vendedor && vw_metas_vendedor.data) || [],
       vwFunil: (vw_funil_resumo && vw_funil_resumo.data) || [],
+      auditoria: (auditoria && auditoria.data) || [],
     };
   }
 
@@ -303,6 +347,7 @@
     const d = await fetchAll();
     state.maps = buildMaps(d);
     state.tarefas = d.tarefas || [];
+    state.atividade = d.auditoria || [];
     // views de relatório (fonte da verdade no servidor) ficam acessíveis ao app
     window.__supaViews = { metas: d.vwMetas || [], funil: d.vwFunil || [], em: Date.now() };
     // escreve no cache no formato nativo do app e reusa os loaders existentes
@@ -340,10 +385,18 @@
   }
 
   /* ------------------------------------------------------------------ seam de escrita */
+  // Fila offline persistente: guarda quais tabelas têm escrita pendente,
+  // sobrevive a reload e é drenada no próximo login (antes da hidratação).
+  const DIRTY_KEY = 'piscinapro_dirty';
+  function persistDirty() { try { localStorage.setItem(DIRTY_KEY, JSON.stringify([...state.dirty])); } catch (e) {} }
+  function loadDirty() { try { return JSON.parse(localStorage.getItem(DIRTY_KEY)) || []; } catch (e) { return []; } }
+  function markDirty(key) { state.dirty.add(key); persistDirty(); }
+  function unmarkDirty(key) { state.dirty.delete(key); persistDirty(); }
+
   // chamado pelo persist() do app.js após gravar no cache local
   function onPersist(key) {
     if (state.hydrating) return;
-    if (!state.ready) { state.dirty.add(key); return; }
+    if (!state.ready) { markDirty(key); return; }
     scheduleSync(key, 450);
   }
 
@@ -353,7 +406,7 @@
   }
 
   async function runSync(key) {
-    if (!state.ready || !sb) { state.dirty.add(key); return; }
+    if (!state.ready || !sb) { markDirty(key); return; }
     setPill('syncing', 'Salvando…');
     state.muteUntil = Date.now() + 3000; // ignora ecos das próprias escritas no Realtime
     try {
@@ -362,12 +415,12 @@
       else if (key === KEYS.orc) await syncOrcamentos();
       else if (key === KEYS.obras) await syncObras();
       else if (key === KEYS.fin) await syncFinanceiro();
-      state.dirty.delete(key);
+      unmarkDirty(key);
       state.muteUntil = Date.now() + 3000;
       setPill('online', 'Online · Supabase');
     } catch (e) {
       err('sync falhou para', key, e);
-      state.dirty.add(key);
+      markDirty(key);
       setPill('error', 'Erro ao salvar no servidor');
     }
   }
@@ -385,6 +438,7 @@
     if (Date.now() < state.muteUntil) return; // eco da nossa própria escrita
     const table = payload && payload.table;
     if (table === 'tarefas') { scheduleTarefasRefresh(); return; }
+    if (table === 'auditoria') { refreshAtividade(); return; }
     scheduleRefresh();
   }
 
@@ -408,6 +462,7 @@
       const { data } = await sb.from('tarefas').select('*');
       state.tarefas = data || [];
       renderBell();
+      checkReminders();
     } catch (e) { err('tarefas refresh', e); }
   }
 
@@ -643,10 +698,22 @@
         </div>
         <button class="sb-open" data-lead="${x.lead.id}">abrir</button>
       </div>`;
+    const ICO = { lead: '🎯', orcamento: '📄', obra: '🏗️', venda: '💰', config: '⚙️' };
+    const aItem = a => `
+      <div class="sb-item">
+        <span class="sb-ico">${ICO[a.entidade] || '•'}</span>
+        <div class="sb-main">
+          <div class="sb-title">${escapeHtml(a.resumo || (a.acao + ' ' + a.entidade))}</div>
+          <div class="sb-sub">${escapeHtml(a.ator || 'alguém')} · ${fmtQuando(a.quando)}</div>
+        </div>
+      </div>`;
     bellPanel.innerHTML = `
       <div class="sb-head">
         <b>Notificações</b>
-        ${meu ? `<button class="sb-mine" title="Filtrar meus leads">meus leads</button>` : ''}
+        <div class="sb-head-actions">
+          ${(remindersSupported() && !remindersOn()) ? `<button class="sb-bell-on" title="Ativar lembretes no dispositivo">🔔 lembretes</button>` : (remindersOn() ? `<span class="sb-bell-ok" title="Lembretes ativos">🔔 on</span>` : '')}
+          ${meu ? `<button class="sb-mine" title="Filtrar meus leads">meus leads</button>` : ''}
+        </div>
       </div>
       <div class="sb-new">
         <input id="sbTarefa" placeholder="${podeCriar ? 'Nova tarefa / follow-up…' : 'Entre para criar tarefas'}" ${podeCriar ? '' : 'disabled'} />
@@ -656,7 +723,9 @@
       <div class="sb-sec">Tarefas${pend.length ? ` · ${pend.length}` : ''}</div>
       <div class="sb-list">${pend.length ? pend.map(tItem).join('') : '<div class="sb-empty">Nenhuma tarefa pendente.</div>'}</div>
       <div class="sb-sec">Leads parados (${STALE_DIAS}+ dias)${parados.length ? ` · ${parados.length}` : ''}</div>
-      <div class="sb-list">${parados.length ? parados.slice(0, 8).map(pItem).join('') : '<div class="sb-empty">Nenhum lead parado. 👏</div>'}</div>`;
+      <div class="sb-list">${parados.length ? parados.slice(0, 8).map(pItem).join('') : '<div class="sb-empty">Nenhum lead parado. 👏</div>'}</div>
+      ${state.atividade.length ? `<div class="sb-sec">Atividade recente</div>
+      <div class="sb-list">${state.atividade.slice(0, 8).map(aItem).join('')}</div>` : ''}`;
 
     const add = () => {
       const inp = bellPanel.querySelector('#sbTarefa');
@@ -674,6 +743,8 @@
       bellPanel.classList.remove('open');
       if (window.App && App.openDetalhe) App.openDetalhe(b.dataset.lead);
     }));
+    const bellOn = bellPanel.querySelector('.sb-bell-on');
+    if (bellOn) bellOn.addEventListener('click', enableReminders);
     const mineBtn = bellPanel.querySelector('.sb-mine');
     if (mineBtn) mineBtn.addEventListener('click', () => {
       bellPanel.classList.remove('open');
@@ -712,6 +783,163 @@
   // helpers locais de formatação/escape (independentes do app)
   function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
   function fmtData(d) { try { return new Date(`${d}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }); } catch (e) { return d; } }
+  function fmtQuando(iso) {
+    const dif = Date.now() - new Date(iso).getTime();
+    const min = Math.floor(dif / 60000);
+    if (min < 1) return 'agora';
+    if (min < 60) return `há ${min} min`;
+    const h = Math.floor(min / 60);
+    if (h < 24) return `há ${h}h`;
+    try { return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; }
+  }
+
+  /* ------------------------------------------------------------------ lembretes (notificações) */
+  let remindTimer = null;
+  const NOTIF_KEY = 'piscinapro_notificados';
+  function loadNotificados() { try { return JSON.parse(localStorage.getItem(NOTIF_KEY)) || {}; } catch (e) { return {}; } }
+  function saveNotificados(m) { try { localStorage.setItem(NOTIF_KEY, JSON.stringify(m)); } catch (e) { /* noop */ } }
+  function remindersSupported() { return 'Notification' in window; }
+  function remindersOn() { return remindersSupported() && Notification.permission === 'granted'; }
+
+  async function enableReminders() {
+    if (!remindersSupported()) { if (typeof toast === 'function') toast('Notificações não suportadas neste navegador', true); return; }
+    let perm = Notification.permission;
+    if (perm === 'default') perm = await Notification.requestPermission();
+    if (perm === 'granted') {
+      startReminderLoop();
+      checkReminders();
+      subscribePush(); // registra push do servidor (lembrete com app fechado)
+      if (typeof toast === 'function') toast('Lembretes ativados 🔔');
+    } else if (typeof toast === 'function') {
+      toast('Permissão de notificação negada', true);
+    }
+    renderBell();
+  }
+
+  // Web Push: assina no navegador e guarda a subscription no banco (usada pelo cron)
+  function urlB64ToUint8(base64) {
+    const pad = '='.repeat((4 - base64.length % 4) % 4);
+    const b64 = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(b64);
+    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+  }
+  async function subscribePush() {
+    try {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      if (!state.ready || !remindersOn()) return;
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8(VAPID_PUBLIC) });
+      const j = sub.toJSON();
+      if (!j.keys) return;
+      await sb.from('push_subscriptions').upsert(
+        { user_id: state.user && state.user.id, endpoint: sub.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth },
+        { onConflict: 'endpoint' });
+      log('Push inscrito');
+    } catch (e) { err('subscribePush', e); }
+  }
+  function startReminderLoop() {
+    if (remindTimer) return;
+    remindTimer = setInterval(checkReminders, 60000); // verifica de minuto em minuto
+  }
+  function showReminder(t) {
+    const body = (t.lead_id ? leadNome(t.lead_id) + ' — ' : '') + (t.vencimento ? 'venceu ' + fmtData(t.vencimento) : 'follow-up');
+    const opts = { body, icon: 'icon.svg', badge: 'icon.svg', tag: 'tarefa-' + t.id, data: { leadId: t.lead_id || null }, requireInteraction: false };
+    try {
+      navigator.serviceWorker.getRegistration().then(reg => {
+        if (reg && reg.showNotification) reg.showNotification('Follow-up: ' + t.titulo, opts);
+        else new Notification('Follow-up: ' + t.titulo, opts);
+      }).catch(() => { try { new Notification('Follow-up: ' + t.titulo, opts); } catch (e) {} });
+    } catch (e) { /* noop */ }
+  }
+  function checkReminders() {
+    if (!remindersOn()) return;
+    const hoje = new Date().toISOString().slice(0, 10);
+    const notif = loadNotificados();
+    let mudou = false;
+    tarefasPendentes().filter(t => t.atrasada).forEach(t => {
+      if (notif[t.id] === hoje) return; // já avisou hoje
+      showReminder(t); notif[t.id] = hoje; mudou = true;
+    });
+    if (mudou) saveNotificados(notif);
+  }
+
+  /* ------------------------------------------------------------------ anexos (Supabase Storage) */
+  const BUCKET = 'anexos';
+  function anexoPrefix(obraKey) { return 'obras/' + String(obraKey).replace(/[^a-zA-Z0-9_-]/g, '_'); }
+  function safeName(n) { return String(n || 'arquivo').replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80); }
+
+  async function anexosList(obraKey) {
+    const pref = anexoPrefix(obraKey);
+    const { data, error } = await sb.storage.from(BUCKET).list(pref, { limit: 100, sortBy: { column: 'created_at', order: 'desc' } });
+    if (error) throw error;
+    const files = (data || []).filter(f => f.id || f.name);
+    const out = [];
+    for (const f of files) {
+      const path = `${pref}/${f.name}`;
+      const { data: signed } = await sb.storage.from(BUCKET).createSignedUrl(path, 3600);
+      out.push({ name: f.name, path, url: signed ? signed.signedUrl : '', mime: f.metadata && f.metadata.mimetype || '' });
+    }
+    return out;
+  }
+  async function anexoUpload(obraKey, file) {
+    const path = `${anexoPrefix(obraKey)}/${Date.now()}-${safeName(file.name)}`;
+    const { error } = await sb.storage.from(BUCKET).upload(path, file, { cacheControl: '3600', upsert: false });
+    if (error) throw error;
+    return path;
+  }
+  async function anexoRemove(path) {
+    const { error } = await sb.storage.from(BUCKET).remove([path]);
+    if (error) throw error;
+  }
+
+  // Monta a galeria dentro do drawer de obra (chamado por app.js openObra)
+  async function mountAnexos(obraKey) {
+    const grid = document.getElementById('anexosGrid');
+    const input = document.getElementById('anexoInput');
+    if (!grid) return;
+    if (!state.ready) {
+      grid.innerHTML = '<div class="anexos-hint">Entre no Supabase para ver e enviar anexos.</div>';
+      if (input) input.disabled = true;
+      return;
+    }
+    const refresh = async () => {
+      grid.innerHTML = '<div class="anexos-hint">Carregando…</div>';
+      try {
+        const files = await anexosList(obraKey);
+        if (!files.length) { grid.innerHTML = '<div class="anexos-hint">Sem anexos. Adicione fotos do terreno, andamento ou o contrato.</div>'; return; }
+        grid.innerHTML = files.map(f => {
+          const isImg = /^image\//.test(f.mime) || /\.(png|jpe?g|webp|gif)$/i.test(f.name);
+          const thumb = isImg
+            ? `<img src="${f.url}" alt="${escapeHtml(f.name)}" loading="lazy">`
+            : `<span class="anexo-file">PDF</span>`;
+          return `<a class="anexo" href="${f.url}" target="_blank" rel="noopener" title="${escapeHtml(f.name)}">
+            ${thumb}<button class="anexo-x" title="Remover" data-path="${escapeHtml(f.path)}">×</button></a>`;
+        }).join('');
+        grid.querySelectorAll('.anexo-x').forEach(b => b.addEventListener('click', async e => {
+          e.preventDefault(); e.stopPropagation();
+          try { await anexoRemove(b.dataset.path); refresh(); if (typeof toast === 'function') toast('Anexo removido'); }
+          catch (err) { if (typeof toast === 'function') toast('Falha ao remover', true); }
+        }));
+      } catch (e) { err('anexosList', e); grid.innerHTML = '<div class="anexos-hint">Erro ao carregar anexos.</div>'; }
+    };
+    if (input && !input._wired) {
+      input._wired = true;
+      input.disabled = false;
+      input.addEventListener('change', async () => {
+        const files = [...(input.files || [])];
+        if (!files.length) return;
+        grid.innerHTML = '<div class="anexos-hint">Enviando…</div>';
+        try {
+          for (const f of files) await anexoUpload(obraKey, f);
+          if (typeof toast === 'function') toast(`${files.length} anexo(s) enviado(s)`);
+        } catch (e) { err('anexoUpload', e); if (typeof toast === 'function') toast('Falha no envio (limite 10MB, imagem/PDF)', true); }
+        input.value = '';
+        refresh();
+      });
+    }
+    refresh();
+  }
 
   /* ------------------------------------------------------------------ status pill */
   let pillEl = null;
@@ -852,7 +1080,10 @@
       font-family:'Manrope',system-ui,sans-serif;display:none;animation:supaUp .2s ease}
     .supa-bell-panel.open{display:block}
     .sb-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;font-size:15px;color:#0f172a}
+    .sb-head-actions{display:flex;align-items:center;gap:6px}
     .sb-mine{border:1px solid #0ea5a4;color:#0b7c86;background:#eafcfb;border-radius:999px;padding:4px 10px;font-size:11.5px;font-weight:700;cursor:pointer}
+    .sb-bell-on{border:1px solid #e6a532;color:#a86a12;background:#fff7e8;border-radius:999px;padding:4px 10px;font-size:11.5px;font-weight:700;cursor:pointer}
+    .sb-bell-ok{color:#12b886;font-size:11.5px;font-weight:700}
     .sb-new{display:flex;gap:6px;padding:4px 12px 10px}
     .sb-new input#sbTarefa{flex:1;min-width:0}
     .sb-new input{padding:8px 10px;border:1px solid #dbe2ea;border-radius:9px;font-size:12.5px;background:#f8fafc;color:#0f172a}
@@ -895,9 +1126,12 @@
     user: () => state.user,
     perfil: () => state.perfil,
     meuVendedor: meuVendedorNome,
+    isAdmin, papel, logAudit,
     // Follow-ups (útil para criar tarefa a partir de um lead, futuramente)
     addTarefa,
     renderBell,
+    // Anexos (Supabase Storage) — usado pelo drawer de obra
+    mountAnexos,
     _state: state,
   };
 })();

@@ -792,7 +792,7 @@ function renderClientes() {
 function obraCardHTML(o) {
   const et = OBRA_MAP[o.etapa];
   const atrasada = new Date(o.previsao) < new Date() && o.etapa !== 'entrega';
-  return `<div class="obra-card" ${rowA11y('Obra de ' + o.cliente.nome)} onclick="App.openObra('${o.id}')">
+  return `<div class="obra-card" draggable="true" data-obra-id="${o.id}" ${rowA11y('Obra de ' + o.cliente.nome)} onclick="App.openObra('${o.id}')">
     <div class="obra-top">
       <span class="badge" style="background:${et.cor}1a;color:${et.cor}"><span class="bd" style="background:${et.cor}"></span>${et.nome}</span>
       ${atrasada ? '<span class="st st-recusado"><span class="bd"></span>Atrasada</span>' : ''}
@@ -828,7 +828,7 @@ function renderObras() {
 
   const cols = OBRA_ETAPAS.map(et => {
     const items = data.filter(o => o.etapa === et.id);
-    return `<div class="obra-col">
+    return `<div class="obra-col" data-obra-etapa="${et.id}">
       <div class="col-head">
         <span class="col-dot" style="background:${et.cor}"></span>
         <span class="col-name">${et.nome}</span>
@@ -848,9 +848,9 @@ function renderObras() {
     </div>
     <div class="funnel-head">
       <h2>Obras &amp; Instalação <span style="color:var(--t-muted);font-family:var(--font-ui);font-size:14px;font-weight:600">· ${data.length}</span></h2>
-      <div class="client-hint">Pipeline gerado a partir dos clientes conquistados</div>
+      <div class="client-hint">Arraste os cards entre etapas · pipeline gerado a partir dos clientes conquistados</div>
     </div>
-    <div class="obra-board">${cols}</div>
+    <div class="obra-board" id="obraBoard">${cols}</div>
   </div>`;
 }
 
@@ -977,7 +977,17 @@ function renderRelatorios() {
 
   const modeloBars = modeloRows.map(r => ({ nome: r.nome, qtd: r.qtd, valor: r.ticket }));
 
+  const expBtn = (fn, label) => `<button class="btn btn-ghost btn-sm" onclick="App.${fn}()">${svgWrap('<path d="M12 3v10m0 0l-3.5-3.5M12 13l3.5-3.5M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke-linecap="round" stroke-linejoin="round"/>')} ${label}</button>`;
+
   return `<div style="padding:24px 28px 32px">
+    <div class="report-export">
+      <span class="re-label">Exportar CSV</span>
+      ${expBtn('exportLeadsCSV', 'Leads')}
+      ${expBtn('exportClientesCSV', 'Clientes')}
+      ${expBtn('exportFunilCSV', 'Funil')}
+      <button class="btn btn-ghost btn-sm" style="margin-left:8px" onclick="App.importLeadsCSV()">${svgWrap('<path d="M12 21V11m0 0l-3.5 3.5M12 11l3.5 3.5M5 7V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v2" stroke-linecap="round" stroke-linejoin="round"/>')} Importar leads</button>
+    </div>
+    ${renderComparativo()}
     <div class="kpis">
       ${kpi('<path d="M3 3v18h18M7 14l3-3 3 3 5-6" stroke-linecap="round" stroke-linejoin="round"/>', 'Conversão geral', pct(ganhos.length, LEADS.length) + '%', `${ganhos.length} ganhos de ${LEADS.length} leads`)}
       ${kpi('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2" stroke-linecap="round"/>', 'Em negociação', moneyK(valorNeg), `${emNeg.length} oportunidades`)}
@@ -1012,6 +1022,137 @@ function renderRelatorios() {
       ${renderMetasServidor()}
     </div>
   </div>`;
+}
+
+/* ---------------- Comparativo mês atual × anterior ---------------- */
+function monthKey(iso) { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
+function renderComparativo() {
+  const now = new Date();
+  const cur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const prevD = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prev = `${prevD.getFullYear()}-${String(prevD.getMonth() + 1).padStart(2, '0')}`;
+
+  const winDate = l => l.atualizadoEm || l.criadoEm;
+  const leadsNovos = mk => LEADS.filter(l => monthKey(l.criadoEm) === mk).length;
+  const ganhosVal = mk => LEADS.filter(l => l.etapa === 'ganho' && monthKey(winDate(l)) === mk).reduce((s, l) => s + l.valor, 0);
+  const ganhosQtd = mk => LEADS.filter(l => l.etapa === 'ganho' && monthKey(winDate(l)) === mk).length;
+  const propostas = mk => (typeof ORC !== 'undefined' ? ORC : []).filter(o => monthKey(o.criadoEm) === mk && ['enviado', 'aprovado', 'recusado'].includes(o.status)).length;
+
+  const metric = (label, curV, prevV, fmt) => {
+    const delta = prevV === 0 ? (curV > 0 ? 100 : 0) : Math.round((curV - prevV) / prevV * 100);
+    const up = delta > 0, flat = delta === 0;
+    const arrow = flat ? '→' : (up ? '▲' : '▼');
+    const cls = flat ? 'flat' : (up ? 'up' : 'down');
+    return `<div class="cmp-item">
+      <div class="cmp-label">${label}</div>
+      <div class="cmp-val num">${fmt(curV)}</div>
+      <div class="cmp-delta ${cls}">${arrow} ${Math.abs(delta)}% <span>vs mês anterior</span></div>
+    </div>`;
+  };
+  const mesNome = new Date().toLocaleDateString('pt-BR', { month: 'long' });
+  return `<section class="report-card cmp-card">
+    <div class="report-head"><h2>Comparativo do mês <span class="live-tag" style="color:var(--water-500)">● ${esc(mesNome)}</span></h2><span>atual × anterior</span></div>
+    <div class="cmp-grid">
+      ${metric('Leads novos', leadsNovos(cur), leadsNovos(prev), v => v)}
+      ${metric('Vendas ganhas', ganhosVal(cur), ganhosVal(prev), v => moneyK(v))}
+      ${metric('Contratos', ganhosQtd(cur), ganhosQtd(prev), v => v)}
+      ${metric('Propostas enviadas', propostas(cur), propostas(prev), v => v)}
+    </div>
+  </section>`;
+}
+
+/* ---------------- Exportação CSV ----------------
+   Usa PP.toCSV (pure.js, testado): separador ';' + BOM p/ Excel pt-BR. */
+function toCSV(headers, rows) { return PP.toCSV(headers, rows); }
+function downloadCSV(nome, csv) {
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = nome;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast(`Exportado: ${nome}`);
+  } catch (e) { toast('Não foi possível exportar', true); }
+}
+const dataArquivo = () => new Date().toISOString().slice(0, 10);
+
+function exportLeadsCSV() {
+  const headers = ['Nome', 'Telefone', 'Email', 'Cidade', 'Origem', 'Modelo', 'Valor', 'Vendedor', 'Etapa', 'Temperatura', 'Criado em', 'Atualizado em', 'Observações'];
+  const rows = LEADS.map(l => [
+    l.nome, l.telefone, l.email, l.cidade, ORIGENS[l.origem]?.nome || l.origem, l.modelo,
+    l.valor, l.vendedor, ETAPA_MAP[l.etapa]?.nome || l.etapa, TEMPS[l.temperatura]?.nome || l.temperatura,
+    dataBR(l.criadoEm), dataBR(l.atualizadoEm || l.criadoEm), (l.observacoes || '').replace(/\s+/g, ' '),
+  ]);
+  downloadCSV(`piscinapro-leads-${dataArquivo()}.csv`, toCSV(headers, rows));
+}
+function exportClientesCSV() {
+  const headers = ['Cliente', 'Telefone', 'Email', 'Cidade', 'Modelo', 'Vendedor', 'Origem', 'Valor', 'Venda em'];
+  const rows = clientesData().map(c => [
+    c.nome, c.telefone, c.email, c.cidade, c.modelo, c.vendedor,
+    ORIGENS[c.origem]?.nome || c.origem, c.valor, c.vendaEm ? dataBR(c.vendaEm) : '',
+  ]);
+  downloadCSV(`piscinapro-clientes-${dataArquivo()}.csv`, toCSV(headers, rows));
+}
+function importLeadsCSV() {
+  if (!exigeAdmin()) return;
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.csv,text/csv';
+  inp.onchange = () => {
+    const f = inp.files && inp.files[0]; if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const rows = PP.parseCSV(reader.result);
+        if (rows.length < 2) { toast('CSV vazio ou sem linhas de dados', true); return; }
+        const head = rows[0].map(h => h.trim().toLowerCase());
+        const col = (...names) => { for (const n of names) { const i = head.indexOf(n); if (i >= 0) return i; } return -1; };
+        const ci = {
+          nome: col('nome', 'cliente'), tel: col('telefone', 'tel', 'whatsapp', 'celular'),
+          email: col('email', 'e-mail'), cidade: col('cidade'), origem: col('origem'),
+          modelo: col('modelo'), valor: col('valor'), vend: col('vendedor'),
+        };
+        if (ci.nome < 0) { toast('O CSV precisa de uma coluna "Nome"', true); return; }
+        const origByNome = Object.fromEntries(Object.entries(ORIGENS).map(([k, v]) => [v.nome.toLowerCase(), k]));
+        let add = 0, dup = 0;
+        for (let i = 1; i < rows.length; i++) {
+          const r = rows[i];
+          const nome = (r[ci.nome] || '').trim(); if (!nome) continue;
+          const tel = ci.tel >= 0 ? (r[ci.tel] || '').trim() : '';
+          const chave = PP.phoneKeyPure(tel);
+          if (chave && LEADS.some(l => PP.phoneKeyPure(l.telefone) === chave)) { dup++; continue; }
+          const oraw = (ci.origem >= 0 ? (r[ci.origem] || '') : '').trim().toLowerCase();
+          const origem = ORIGENS[oraw] ? oraw : (origByNome[oraw] || 'site');
+          const mraw = ci.modelo >= 0 ? (r[ci.modelo] || '').trim() : '';
+          const modelo = (MODELOS.find(m => m.nome === mraw) || MODELOS[0] || { nome: '' }).nome;
+          const valor = ci.valor >= 0 ? (parseInt(String(r[ci.valor]).replace(/\D/g, ''), 10) || 0) : 0;
+          const vend = ci.vend >= 0 ? ((VENDEDORES.find(v => v.nome === (r[ci.vend] || '').trim()) || {}).nome || '') : '';
+          LEADS.unshift({
+            id: uid(), nome, telefone: tel ? PP.formatPhoneBR(tel) : '',
+            email: ci.email >= 0 ? (r[ci.email] || '').trim() : '', cidade: ci.cidade >= 0 ? ((r[ci.cidade] || '').trim() || '—') : '—',
+            modelo, valor, origem, vendedor: vend, etapa: 'novo', temperatura: 'morno',
+            criadoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString(),
+            observacoes: 'Importado via CSV',
+            interacoes: [{ id: uid(), quando: new Date().toISOString(), tipo: 'Lead', texto: 'Importado via CSV' }],
+          });
+          add++;
+        }
+        save(); render();
+        if (add) audit('lead', null, 'importou', `${add} leads importados via CSV`);
+        toast(`Importados: ${add} · duplicados ignorados: ${dup}`);
+      } catch (e) { toast('Não foi possível ler o CSV', true); }
+    };
+    reader.readAsText(f, 'utf-8');
+  };
+  inp.click();
+}
+function exportFunilCSV() {
+  const headers = ['Etapa', 'Quantidade', 'Valor total'];
+  const rows = ETAPAS.map(et => {
+    const items = LEADS.filter(l => l.etapa === et.id);
+    return [et.nome, items.length, items.reduce((s, l) => s + l.valor, 0)];
+  });
+  downloadCSV(`piscinapro-funil-${dataArquivo()}.csv`, toCSV(headers, rows));
 }
 
 /* Card de metas por vendedor calculado NO SERVIDOR (view vw_metas_vendedor).
@@ -1058,6 +1199,46 @@ function renderConfigTable(title, hint, headers, rows, addHtml) {
     </div>
   </section>`;
 }
+/* ---------------- Tema claro/escuro ---------------- */
+function currentTheme() {
+  return document.documentElement.getAttribute('data-theme')
+    || (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+}
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  try { localStorage.setItem('piscinapro_theme', t); } catch (e) {}
+  syncThemeIcon(t);
+}
+function toggleTheme() { applyTheme(currentTheme() === 'dark' ? 'light' : 'dark'); }
+function syncThemeIcon(t) {
+  const b = document.getElementById('themeToggle'); if (!b) return;
+  const sun = '<circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke-linecap="round"/>';
+  const moon = '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke-linecap="round" stroke-linejoin="round"/>';
+  b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">${t === 'dark' ? sun : moon}</svg>`;
+}
+
+/* ---------------- Auditoria (registra quem mudou o quê) ---------------- */
+function audit(entidade, id, acao, resumo) {
+  if (window.Supa && window.Supa.logAudit) window.Supa.logAudit(entidade, id, acao, resumo);
+}
+
+/* ---------------- Papéis / permissões (UX; a fronteira real é o RLS) ---------------- */
+function ehAdmin() { return !window.Supa || !window.Supa.isAdmin || window.Supa.isAdmin(); }
+function exigeAdmin() {
+  if (ehAdmin()) return true;
+  toast('Sem permissão: ação restrita a administradores', true);
+  return false;
+}
+function lockConfigIfNeeded() {
+  if (ehAdmin()) return;
+  const v = document.getElementById('view'); if (!v) return;
+  v.querySelectorAll('input, select, textarea, button').forEach(e => { e.disabled = true; });
+  const banner = document.createElement('div');
+  banner.className = 'ro-banner';
+  banner.innerHTML = `${svgWrap('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke-linecap="round"/>')} Perfil <b>consultor</b> — configurações em modo leitura. Peça a um administrador para editar.`;
+  v.prepend(banner);
+}
+
 function renderConfiguracoes() {
   const modeloRows = MODELOS.map((m, i) => `<tr>
     <td>${configInput(`cfg_mod_nome_${i}`, m.nome)}</td>
@@ -1416,10 +1597,10 @@ function render() {
   else if (VIEW === 'funil') { el.className = 'view'; el.innerHTML = renderFunil(); bindDnD(); }
   else if (VIEW === 'lista') { el.className = 'view no-pad'; el.innerHTML = renderLista(); }
   else if (VIEW === 'clientes') { el.className = 'view no-pad'; el.innerHTML = renderClientes(); }
-  else if (VIEW === 'obras') { el.className = 'view no-pad'; el.innerHTML = renderObras(); }
+  else if (VIEW === 'obras') { el.className = 'view no-pad'; el.innerHTML = renderObras(); bindObraDnD(); }
   else if (VIEW === 'financeiro') { el.className = 'view no-pad'; el.innerHTML = renderFinanceiro(); }
   else if (VIEW === 'relatorios') { el.className = 'view no-pad'; el.innerHTML = renderRelatorios(); }
-  else if (VIEW === 'configuracoes') { el.className = 'view no-pad'; el.innerHTML = renderConfiguracoes(); }
+  else if (VIEW === 'configuracoes') { el.className = 'view no-pad'; el.innerHTML = renderConfiguracoes(); lockConfigIfNeeded(); }
   else if (VIEW === 'orcamentos' && window.Orc) { el.className = 'view no-pad'; el.innerHTML = Orc.renderView(); Orc.afterRender(); }
   else { el.className = 'view no-pad'; el.innerHTML = renderSoon(VIEW); }
 
@@ -1518,7 +1699,79 @@ function moverLead(id, etapa) {
   l.atualizadoEm = new Date().toISOString();
   l.interacoes.unshift({ id: uid(), quando: new Date().toISOString(), tipo: etapa === 'ganho' ? 'Ganho' : 'Etapa', texto: `Movido de "${de}" para "${para}"` });
   save(); render();
+  audit('lead', id, 'moveu', `${l.nome}: ${de} → ${para}`);
   toast(etapa === 'ganho' ? `${l.nome} — venda ganha!` : `${l.nome} → ${para}`);
+}
+
+/* ---- Drag & drop das OBRAS (mesmo padrão do funil: mouse + toque) ---- */
+let dragObraId = null;
+function moverObra(id, etapa) {
+  const o = obrasData().find(x => x.id === id);
+  if (!o || o.etapa === etapa) return;
+  patchObra(id, { etapa });
+  render();
+  audit('obra', id, 'moveu', `Obra de ${o.cliente.nome} → ${OBRA_MAP[etapa]?.nome || etapa}`);
+  toast(`Obra de ${o.cliente.nome} → ${OBRA_MAP[etapa]?.nome || etapa}`);
+}
+function bindObraDnD() {
+  document.querySelectorAll('.obra-card').forEach(card => {
+    card.addEventListener('dragstart', e => {
+      dragObraId = card.dataset.obraId;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', () => { card.classList.remove('dragging'); dragObraId = null; });
+  });
+  document.querySelectorAll('.obra-col').forEach(col => {
+    const etapa = col.dataset.obraEtapa;
+    col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('drag-over'); });
+    col.addEventListener('dragleave', e => { if (!col.contains(e.relatedTarget)) col.classList.remove('drag-over'); });
+    col.addEventListener('drop', e => {
+      e.preventDefault();
+      col.classList.remove('drag-over');
+      if (!dragObraId) return;
+      moverObra(dragObraId, etapa);
+    });
+  });
+  bindObraTouchDnD();
+}
+function bindObraTouchDnD() {
+  const board = document.getElementById('obraBoard');
+  if (!board) return;
+  let el = null, id = null, active = false, sx = 0, sy = 0, lastCol = null;
+  const clear = () => {
+    lastCol && lastCol.classList.remove('drag-over');
+    el && el.classList.remove('dragging');
+    el = id = lastCol = null; active = false;
+  };
+  board.addEventListener('touchstart', e => {
+    const card = e.target.closest('.obra-card'); if (!card) return;
+    el = card; id = card.dataset.obraId; active = false;
+    const t = e.touches[0]; sx = t.clientX; sy = t.clientY;
+  }, { passive: true });
+  board.addEventListener('touchmove', e => {
+    if (!el) return;
+    const t = e.touches[0];
+    if (!active) {
+      if (Math.hypot(t.clientX - sx, t.clientY - sy) < 10) return;
+      active = true; el.classList.add('dragging');
+    }
+    e.preventDefault();
+    const col = document.elementFromPoint(t.clientX, t.clientY)?.closest('.obra-col');
+    if (col !== lastCol) { lastCol && lastCol.classList.remove('drag-over'); lastCol = col; col && col.classList.add('drag-over'); }
+  }, { passive: false });
+  board.addEventListener('touchend', e => {
+    if (el && active) {
+      e.preventDefault();
+      const etapa = lastCol && lastCol.dataset.obraEtapa;
+      const d = id;
+      clear();
+      if (etapa) moverObra(d, etapa);
+      return;
+    }
+    clear();
+  });
+  board.addEventListener('touchcancel', clear);
 }
 
 /* ============================================================
@@ -1534,7 +1787,7 @@ function openNovoLead(etapa) {
     <div class="modal-body">
       <div class="field"><label>Nome do cliente <span class="req">*</span></label><input id="f_nome" placeholder="Ex.: Marcos Tavares" autofocus /></div>
       <div class="field row2">
-        <div><label>Telefone / WhatsApp <span class="req">*</span></label><input id="f_tel" placeholder="(19) 99999-0000" /></div>
+        <div><label>Telefone / WhatsApp <span class="req">*</span></label><input id="f_tel" placeholder="(19) 99999-0000" inputmode="tel" oninput="this.value=PP.formatPhoneBR(this.value)" /></div>
         <div><label>Cidade</label><input id="f_cidade" placeholder="Campinas/SP" /></div>
       </div>
       <div class="field"><label>E-mail</label><input id="f_email" placeholder="cliente@email.com" /></div>
@@ -1581,6 +1834,11 @@ function salvarLead() {
   const nome = g('f_nome').value.trim();
   const tel = g('f_tel').value.trim();
   if (!nome || !tel) { toast('Preencha nome e telefone', true); return; }
+  if (!PP.isValidPhoneBR(tel)) { toast('Telefone inválido — use DDD + número', true); return; }
+  // anti-duplicidade por telefone
+  const chave = PP.phoneKeyPure(tel);
+  const dup = LEADS.find(l => PP.phoneKeyPure(l.telefone) === chave);
+  if (dup && !window.confirm(`Já existe um lead com este telefone: ${dup.nome} (${ETAPA_MAP[dup.etapa]?.nome || dup.etapa}). Cadastrar mesmo assim?`)) return;
   const valor = parseInt((g('f_valor').value || '0').replace(/\D/g, ''), 10) || 0;
   const lead = {
     id: uid(), nome, telefone: tel, email: g('f_email').value.trim(),
@@ -1591,6 +1849,7 @@ function salvarLead() {
     interacoes: [{ id: uid(), quando: new Date().toISOString(), tipo: 'Lead', texto: 'Lead cadastrado no sistema' }],
   };
   LEADS.unshift(lead); save(); closeAll(); render();
+  audit('lead', lead.id, 'criou', `Novo lead: ${nome} · ${lead.modelo}`);
   toast(`Lead "${nome}" adicionado ✓`);
 }
 function openEditarLead(id) {
@@ -1603,7 +1862,7 @@ function openEditarLead(id) {
     <div class="modal-body">
       <div class="field"><label>Nome do cliente <span class="req">*</span></label><input id="e_nome" value="${esc(l.nome)}" /></div>
       <div class="field row2">
-        <div><label>Telefone / WhatsApp <span class="req">*</span></label><input id="e_tel" value="${esc(l.telefone)}" /></div>
+        <div><label>Telefone / WhatsApp <span class="req">*</span></label><input id="e_tel" value="${esc(l.telefone)}" inputmode="tel" oninput="this.value=PP.formatPhoneBR(this.value)" /></div>
         <div><label>Cidade</label><input id="e_cidade" value="${esc(l.cidade || '')}" /></div>
       </div>
       <div class="field"><label>E-mail</label><input id="e_email" value="${esc(l.email || '')}" /></div>
@@ -1850,6 +2109,7 @@ function salvarEdicaoCliente(id) {
   toast('Cliente atualizado');
 }
 function cancelarCliente(id) {
+  if (!exigeAdmin()) return;
   const c = clientesData().find(x => x.id === id); if (!c) return;
   if (c.lead) {
     c.lead.etapa = 'perdido';
@@ -1864,6 +2124,7 @@ function cancelarCliente(id) {
   patchObra(id, { cancelada: true });
   patchFin(id, { cancelado: true });
   closeAll(); render();
+  audit('venda', id, 'cancelou', `Venda cancelada: ${c.nome}`);
   toast('Venda cancelada e removida do pós-venda');
 }
 function patchObra(id, patch) {
@@ -1934,12 +2195,20 @@ function openObra(id) {
         <input id="obraNotaInput" placeholder="Registrar nota da obra, pendência ou vistoria…" onkeydown="if(event.key==='Enter')App.addObraNota('${o.id}')" />
         <button class="btn btn-ghost btn-sm" onclick="App.addObraNota('${o.id}')">Registrar</button>
       </div>
+
+      <div class="sec-title">Anexos &amp; fotos</div>
+      <div class="anexos-grid" id="anexosGrid"><div class="anexos-hint">Carregando…</div></div>
+      <label class="anexos-add">
+        <input type="file" id="anexoInput" accept="image/*,application/pdf" multiple hidden disabled>
+        ${svgWrap('<path d="M12 5v14M5 12h14" stroke-linecap="round"/>')} Adicionar foto ou PDF
+      </label>
     </div>
     <div class="drawer-foot">
       <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="App.openCliente('${o.id}')">Ver cliente</button>
       <a class="btn btn-ghost" href="https://wa.me/55${phoneKey(o.cliente.telefone)}" target="_blank" rel="noopener" title="Abrir WhatsApp">${origemIcon('whatsapp')}</a>
     </div>`;
   openOverlay(); d.classList.add('open');
+  if (window.Supa && Supa.mountAnexos) Supa.mountAnexos(o.id);
 }
 
 function patchFin(id, patch) {
@@ -2108,6 +2377,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadOps();
   if (window.orcInit) window.orcInit();
   render();
+  syncThemeIcon(currentTheme());
 
   // Sobe a camada Supabase: mostra o portão de login, hidrata com os dados
   // reais do banco e liga o write-through. Até lá, o app roda pelo cache local.
@@ -2158,10 +2428,14 @@ window.App = {
   // Configurações
   saveModelo, addModelo, delModelo, saveAdicional, addAdicional, delAdicional,
   saveVendedor, addVendedor, delVendedor, saveEquipe, addEquipe, delEquipe,
-  // Backup
+  // Backup / exportação
   exportarBackup, importarBackup,
+  exportLeadsCSV, exportClientesCSV, exportFunilCSV,
   // Geral
   closeAll, toast, go, setFiltro, keyActivate, verOrcamento,
-  // Supabase
+  // Supabase / tema
   logout: () => { if (window.Supa && window.Supa.logout) window.Supa.logout(); },
+  toggleTheme,
+  // Exportar/Importar
+  importLeadsCSV,
 };

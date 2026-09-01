@@ -116,10 +116,30 @@ Implementados sobre a integração, todos em `supabase.js` (exceto o WhatsApp, e
 - **Relatórios do servidor:** a tela de Relatórios ganhou o card **"Metas por vendedor · servidor"**,
   alimentado pelas views `vw_metas_vendedor` / `vw_funil_resumo` (numeração feita no banco). Puxadas
   na hidratação e expostas em `window.__supaViews`; offline mostram um aviso e somem graciosamente.
-- **PWA instalável:** `manifest.json` + `sw.js` (service worker) + `icon.svg`. App shell em
-  cache (stale-while-revalidate), navegação network-first com fallback offline, CDN da lib/fontes
-  em cache runtime, e **API do Supabase sempre pela rede** (nunca cacheia dados). Instalável no
-  desktop e no celular; requer http/https (não funciona por `file://`).
+- **PWA instalável:** `manifest.json` + `sw.js` (service worker) + `icon.svg`. App shell
+  **network-first** (sempre pega a versão nova online; cache só como fallback offline — evita
+  código velho após deploy), CDN da lib/fontes em cache runtime, e **API do Supabase sempre pela
+  rede** (nunca cacheia dados). Instalável no desktop e no celular; requer http/https (não `file://`).
+- **Drag & drop em Obras:** os cards da tela Obras & Instalação são arrastáveis entre as etapas
+  (mesmo padrão mouse+toque do funil de leads); soltar chama `moverObra`, que grava a etapa e
+  sincroniza. Ver `bindObraDnD` em `app.js`.
+- **Drag & drop em Orçamentos:** a tela de Orçamentos ganhou um toggle **Lista ⇄ Quadro**; no
+  quadro (kanban por status), arrastar move a proposta entre rascunho/enviado/aprovado/recusado.
+  Soltar em "Aprovado" também marca o lead como ganho. Ver `orcRenderBoard`/`bindOrcDnD` em
+  `orcamentos.js`.
+- **Exportar CSV:** na tela de Relatórios, botões para exportar **Leads, Clientes e Funil** em CSV
+  (separador `;` + BOM UTF-8, abre no Excel pt-BR). Ver `exportLeadsCSV` etc. em `app.js`.
+- **Anexos/fotos (Storage):** bucket privado `anexos` (migration `07`); no drawer de obra dá pra
+  enviar fotos (terreno/andamento) e o contrato em PDF, com galeria e remoção. URLs assinadas
+  (1h). Ver `mountAnexos` em `supabase.js`. Só online.
+- **Lembretes (notificações):** botão "🔔 lembretes" no sino pede permissão e passa a **notificar
+  follow-ups vencidos** (checagem de minuto em minuto) enquanto o app está aberto/em segundo plano.
+  O `sw.js` já tem handlers de `push`/`notificationclick` prontos para push do servidor. Para
+  notificação com o app **fechado** falta o trio VAPID + Edge Function + `pg_cron` (não incluso).
+
+## Migrations adicionais (cont.)
+
+7. `07_storage_anexos` — bucket privado `anexos` + policies `authenticated` em `storage.objects`
 
 > Nota de RLS: mantive o acesso **team-wide** (`authenticated` vê tudo), que é o desenho da
 > ferramenta — todos os painéis (metas por vendedor, funil geral, financeiro) agregam dados de
@@ -130,6 +150,67 @@ Implementados sobre a integração, todos em `supabase.js` (exceto o WhatsApp, e
 
 5. `05_perfis_e_tarefas` — tabelas `perfis` e `tarefas` (+ RLS `authenticated`, índices, trigger)
 6. `06_realtime_publication` — adiciona todas as tabelas à publicação `supabase_realtime`
+
+- **Analytics com período:** card **"Comparativo do mês"** em Relatórios — leads novos, vendas
+  ganhas, contratos e propostas do mês atual × anterior, com variação %. Ver `renderComparativo`.
+- **Papéis & permissões:** `perfis.papel` (`admin`/`consultor`). O dono (`OWNER_EMAIL`) e o 1º
+  usuário viram admin; os demais, consultor. Consultor vê **Configurações em modo leitura** e não
+  exclui orçamento nem cancela venda. É camada de UX (a fronteira dura é o RLS). `Supa.isAdmin()`.
+- **Captação de leads (Edge Function `intake-lead`, pública):** `POST /functions/v1/intake-lead`
+  com header `x-intake-key`. Cria lead + interação; resolve modelo por nome; origem validada.
+  Como `leads` está no Realtime, o lead aparece **na hora** no app. Segredo em `app_config.intake_key`.
+- **Web Push (app fechado):** chaves VAPID em `app_config`; assinaturas em `push_subscriptions`;
+  Edge Function `send-reminders` (protegida por `app_config.cron_secret`) envia push de follow-ups
+  vencidos via `npm:web-push`; `pg_cron` chama de hora em hora (11–22 UTC) por `pg_net`. O cliente
+  se inscreve ao ativar "🔔 lembretes". `push_em` evita repetir o aviso no mesmo dia.
+
+### Como plugar a captação no seu site
+
+```html
+<script>
+fetch('https://tczczahhibqnojlptpyx.supabase.co/functions/v1/intake-lead', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'x-intake-key': 'SUA_INTAKE_KEY' },
+  body: JSON.stringify({ nome, telefone, email, cidade, origem: 'site', modelo, observacoes }),
+});
+</script>
+```
+
+> Pegue a `intake_key` e os segredos com: `select chave, valor from app_config;` (só via painel/
+> service_role). **Não** exponha `cron_secret`, `vapid_private` nem `service_role` no frontend.
+
+- **Testes automatizados:** `pure.js` (utilidades puras: telefone/CSV) com suíte em
+  `tests/pure.test.mjs`. Rodar: **`npm test`** (15 casos, sem dependências).
+- **Validação + máscara + anti-duplicidade:** o cadastro de lead mascara o telefone ao digitar,
+  valida DDD+número e **avisa se já existe lead com o mesmo telefone** (via `PP.phoneKeyPure`).
+- **Fila offline persistente:** as tabelas com escrita pendente são guardadas em `localStorage`
+  (`piscinapro_dirty`) e **drenadas no próximo login, antes da hidratação** — edições feitas
+  offline não são mais perdidas ao recarregar.
+- **Auditoria:** tabela `auditoria` (migration `12`) + `Supa.logAudit`; registra criar/mover/
+  aprovar/cancelar/importar (lead, orçamento, obra, venda). Aparece em **"Atividade recente"** no
+  sino, ao vivo (Realtime).
+- **Papéis (reforço):** consultor não importa/edita config nem exclui; admin sim.
+- **E-mail da proposta:** botão **E-mail** na proposta abre o cliente de e-mail com assunto/corpo
+  prontos (o vendedor anexa o PDF gerado e envia) — irmão do botão WhatsApp.
+- **Import de leads via CSV:** em Relatórios, **"Importar leads"** lê um CSV (colunas por cabeçalho),
+  ignora duplicados por telefone e cria os leads. Contraparte do export.
+- **Dark mode:** toggle ☀/🌙 na topbar; tema salvo em `localStorage` e aplicado sem flash (script
+  no `<head>`). Paleta escura por variáveis (`:root[data-theme="dark"]`).
+
+## Edge Functions
+
+| Função | Auth | Papel |
+|---|---|---|
+| `intake-lead` | pública (`x-intake-key`) | cria lead a partir do site/WhatsApp/Ads |
+| `send-reminders` | `x-cron-secret` | envia Web Push de follow-ups vencidos (via pg_cron) |
+
+## Migrations adicionais (cont.)
+
+8. `08_intake_e_push` — `app_config`, `push_subscriptions`, `tarefas.push_em`
+9. `09_vapid_cron_config` — chaves VAPID + `cron_secret`; habilita `pg_net`/`pg_cron`
+10. `10_cron_send_reminders` — agenda `send-reminders` (`0 11-22 * * *`)
+11. `11_app_config_deny_policy` — nega explicitamente anon/authenticated em `app_config`
+12. `12_auditoria` — tabela `auditoria` (+ RLS, índice, Realtime)
 
 ## Pendências de segurança (advisors)
 

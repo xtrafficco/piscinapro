@@ -156,7 +156,8 @@ function orcRenderList() {
     ${kpis}
     <div class="orc-toolbar">
       <h2>Orçamentos &amp; Propostas</h2>
-      <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="Orc.novo()">${SVG('<path d="M12 5v14M5 12h14" stroke-linecap="round"/>')} Novo orçamento</button>
+      ${orcViewToggle()}
+      <button class="btn btn-primary btn-sm" onclick="Orc.novo()">${SVG('<path d="M12 5v14M5 12h14" stroke-linecap="round"/>')} Novo orçamento</button>
     </div>
     <div class="panel">
       <table class="tbl">
@@ -165,6 +166,102 @@ function orcRenderList() {
       </table>
     </div>
   </div>`;
+}
+
+/* alterna lista tabular ⇄ quadro (kanban) por status */
+function orcViewToggle() {
+  const b = (v, ic, lbl) => `<button class="seg-btn ${orcView === v ? 'active' : ''}" onclick="Orc.setView('${v}')" title="${lbl}">${SVG(ic)}<span>${lbl}</span></button>`;
+  return `<div class="seg">
+    ${b('list', '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11" stroke-linecap="round"/>', 'Lista')}
+    ${b('board', '<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="14" rx="1.5"/>', 'Quadro')}
+  </div>`;
+}
+
+const ORC_STATUS = [
+  { id: 'rascunho', nome: 'Rascunho', cor: '#8b93a7' },
+  { id: 'enviado',  nome: 'Enviado',  cor: '#e6a532' },
+  { id: 'aprovado', nome: 'Aprovado', cor: '#12b886' },
+  { id: 'recusado', nome: 'Recusado', cor: '#b0567a' },
+];
+
+function orcCardHTML(o) {
+  const c = calc(o);
+  const st = ORC_STATUS.find(s => s.id === o.status) || ORC_STATUS[0];
+  return `<div class="obra-card orc-card" draggable="true" data-orc-id="${o.id}" ${typeof rowA11y === 'function' ? rowA11y('Abrir orçamento ' + o.numero) : ''} onclick="Orc.editar('${o.id}')">
+    <div class="obra-top">
+      <span class="badge" style="background:${st.cor}1a;color:${st.cor}"><span class="bd" style="background:${st.cor}"></span>#${o.numero}</span>
+      <span class="cell-sub">${dataBR(o.criadoEm)}</span>
+    </div>
+    <div class="obra-client">${esc(o.cliente.nome)}</div>
+    <div class="obra-sub">${esc(o.modelo)}${o.adicionais.length ? ` · +${o.adicionais.length} adic.` : ''}</div>
+    <div class="obra-meta">
+      <span style="font-weight:800;color:var(--t-strong)">${money(c.total)}</span>
+      <span><span class="avatar" style="background:${vendedorCor(o.vendedor)};width:20px;height:20px;font-size:9px;display:inline-grid;place-items:center;border-radius:50%;color:#fff">${initials(o.vendedor)}</span> ${esc((o.vendedor || '').split(' ')[0])}</span>
+    </div>
+  </div>`;
+}
+
+function orcRenderBoard() {
+  const cols = ORC_STATUS.map(st => {
+    const items = ORC.filter(o => o.status === st.id).sort((a, b) => new Date(b.criadoEm) - new Date(a.criadoEm));
+    return `<div class="obra-col orc-col" data-orc-status="${st.id}">
+      <div class="col-head">
+        <span class="col-dot" style="background:${st.cor}"></span>
+        <span class="col-name">${st.nome}</span>
+        <span class="col-count">${items.length}</span>
+      </div>
+      <div class="obra-col-body">${items.map(orcCardHTML).join('') || `<div class="col-empty">Sem orçamentos</div>`}</div>
+    </div>`;
+  }).join('');
+  return `<div style="padding:24px 28px 32px">
+    <div class="orc-toolbar">
+      <h2>Orçamentos &amp; Propostas</h2>
+      ${orcViewToggle()}
+      <button class="btn btn-primary btn-sm" onclick="Orc.novo()">${SVG('<path d="M12 5v14M5 12h14" stroke-linecap="round"/>')} Novo orçamento</button>
+    </div>
+    <div class="client-hint" style="margin:-8px 0 16px">Arraste as propostas entre os status. Soltar em “Aprovado” também marca o lead como ganho.</div>
+    <div class="obra-board" id="orcBoard">${cols}</div>
+  </div>`;
+}
+
+/* mover status via drop (mesmo padrão do funil/obras) */
+let dragOrcId = null;
+function moverOrcStatus(id, status) {
+  const o = ORC.find(x => x.id === id);
+  if (!o || o.status === status) return;
+  if (status === 'aprovado') { Orc.aprovar(id); return; } // aprova + move lead p/ ganho
+  o.status = status;
+  orcSave();
+  goOrc();
+  const nome = (ORC_STATUS.find(s => s.id === status) || {}).nome || status;
+  if (typeof audit === 'function') audit('orcamento', o.id, 'moveu', `Proposta #${o.numero} → ${nome}`);
+  if (typeof toast === 'function') toast(`Proposta #${o.numero} → ${nome}`);
+}
+function bindOrcDnD() {
+  document.querySelectorAll('.orc-card').forEach(card => {
+    card.addEventListener('dragstart', e => { dragOrcId = card.dataset.orcId; card.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+    card.addEventListener('dragend', () => { card.classList.remove('dragging'); dragOrcId = null; });
+  });
+  document.querySelectorAll('.orc-col').forEach(col => {
+    const status = col.dataset.orcStatus;
+    col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('drag-over'); });
+    col.addEventListener('dragleave', e => { if (!col.contains(e.relatedTarget)) col.classList.remove('drag-over'); });
+    col.addEventListener('drop', e => { e.preventDefault(); col.classList.remove('drag-over'); if (dragOrcId) moverOrcStatus(dragOrcId, status); });
+  });
+  const board = document.getElementById('orcBoard');
+  if (!board) return;
+  let el = null, id = null, active = false, sx = 0, sy = 0, lastCol = null;
+  const clear = () => { lastCol && lastCol.classList.remove('drag-over'); el && el.classList.remove('dragging'); el = id = lastCol = null; active = false; };
+  board.addEventListener('touchstart', e => { const card = e.target.closest('.orc-card'); if (!card) return; el = card; id = card.dataset.orcId; active = false; const t = e.touches[0]; sx = t.clientX; sy = t.clientY; }, { passive: true });
+  board.addEventListener('touchmove', e => {
+    if (!el) return; const t = e.touches[0];
+    if (!active) { if (Math.hypot(t.clientX - sx, t.clientY - sy) < 10) return; active = true; el.classList.add('dragging'); }
+    e.preventDefault();
+    const col = document.elementFromPoint(t.clientX, t.clientY)?.closest('.orc-col');
+    if (col !== lastCol) { lastCol && lastCol.classList.remove('drag-over'); lastCol = col; col && col.classList.add('drag-over'); }
+  }, { passive: false });
+  board.addEventListener('touchend', e => { if (el && active) { e.preventDefault(); const s = lastCol && lastCol.dataset.orcStatus; const d = id; clear(); if (s) moverOrcStatus(d, s); return; } clear(); });
+  board.addEventListener('touchcancel', clear);
 }
 
 /* ============================================================
@@ -467,6 +564,7 @@ function abrirProposta(o) {
         <div class="pv-title">Proposta comercial</div>
         <button class="pv-btn ghost" onclick="Orc.fecharProposta()">Fechar</button>
         <button class="pv-btn whats" onclick="Orc.whatsProposta()">${SVG('<path d="M3 21l1.7-4.9A8 8 0 1 1 8 20.3L3 21z" stroke-linejoin="round" stroke-linecap="round"/>')} WhatsApp</button>
+        <button class="pv-btn ghost" onclick="Orc.emailProposta()">${SVG('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M4 7l8 6 8-6" stroke-linecap="round" stroke-linejoin="round"/>')} E-mail</button>
         <button class="pv-btn" onclick="Orc.printProposta()">${SVG('<path d="M12 3v10m0 0l-3.5-3.5M12 13l3.5-3.5M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke-linecap="round" stroke-linejoin="round"/>')} Imprimir / Salvar PDF</button>
       </div>
       <div class="pv-body"><iframe id="propostaFrame" title="Proposta"></iframe></div>`;
@@ -485,6 +583,17 @@ function whatsProposta() {
   const msg = `Olá ${o.cliente.nome || ''}! Segue a proposta PiscinaPro Nº ${o.numero} da sua piscina ${o.modelo} — total ${total}. Qualquer dúvida, estou à disposição! 🏊`;
   const base = tel ? `https://wa.me/55${tel}` : 'https://wa.me/';
   window.open(`${base}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener');
+}
+
+// Abre o cliente de e-mail com assunto/corpo prontos (o vendedor anexa o PDF gerado e envia).
+function emailProposta() {
+  const o = propostaAtual; if (!o) return;
+  const total = money(calc(o).total);
+  const assunto = `Proposta PiscinaPro Nº ${o.numero} — Piscina ${o.modelo}`;
+  const corpo = `Olá ${o.cliente.nome || ''},\n\nSegue a proposta da sua piscina ${o.modelo} (Nº ${o.numero}) — total ${total}.\n` +
+    `O PDF detalhado está em anexo.\n\nQualquer dúvida, estou à disposição.\n\n${o.vendedor || 'PiscinaPro'}\nPiscinaPro Vendas`;
+  const to = o.cliente.email || '';
+  window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
 }
 
 /* ============================================================
@@ -509,8 +618,13 @@ function novoDraft(lead) {
 }
 
 const Orc = {
-  renderView() { return orcView === 'builder' ? orcRenderBuilder() : orcRenderList(); },
-  afterRender() { /* handlers são inline; nada a fazer */ },
+  renderView() {
+    if (orcView === 'builder') return orcRenderBuilder();
+    if (orcView === 'board') return orcRenderBoard();
+    return orcRenderList();
+  },
+  afterRender() { if (orcView === 'board') bindOrcDnD(); },
+  setView(v) { orcView = v; goOrc(); },
 
   novo() { novoDraft(null); },
   novoDeLead(id) {
@@ -577,6 +691,7 @@ const Orc = {
   fecharProposta() { const ov = document.getElementById('propostaOverlay'); if (ov) ov.classList.remove('open'); },
   printProposta() { const f = document.getElementById('propostaFrame'); if (f && f.contentWindow) { f.contentWindow.focus(); f.contentWindow.print(); } },
   whatsProposta() { whatsProposta(); },
+  emailProposta() { emailProposta(); },
 
   setStatus(id, st) {
     const o = ORC.find(x => x.id === id); if (!o) return;
@@ -592,9 +707,11 @@ const Orc = {
       if (l && l.etapa !== 'ganho' && typeof moverLead === 'function') moverLead(o.leadId, 'ganho');
     }
     goOrc();
+    if (typeof audit === 'function') audit('orcamento', o.id, 'aprovou', `Proposta #${o.numero} aprovada — ${o.cliente.nome}`);
     toast(`Proposta #${o.numero} aprovada!`);
   },
   excluir(id) {
+    if (typeof exigeAdmin === 'function' && !exigeAdmin()) return;
     const o = ORC.find(x => x.id === id); if (!o) return;
     ORC = ORC.filter(x => x.id !== id); orcSave(); goOrc();
     toast(`Orçamento #${o.numero} excluído`);
@@ -614,6 +731,7 @@ function goOrc() {
   const el = document.getElementById('view');
   el.className = 'view no-pad';
   el.innerHTML = Orc.renderView();
+  Orc.afterRender();
 }
 
 const SVG = inner => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">${inner}</svg>`;

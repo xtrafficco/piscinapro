@@ -1,0 +1,10 @@
+{
+  "name": "piscinapro",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CRM de vendas e pós-venda de piscinas (vanilla JS + Supabase).",
+  "scripts": {
+    "test": "node tests/pure.test.mjs",
+    "serve": "node .claude/static-server.js"
+  }
+}
