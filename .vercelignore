@@ -1,0 +1,18 @@
+# Só o app vai para o ar; documentação, testes, scripts e backend ficam apenas no GitHub
+README.md
+BACKEND.md
+SMOKE_TEST.md
+database.types.ts
+tests/
+e2e/
+scripts/
+supabase/
+.github/
+.claude/
+node_modules/
+playwright.config.js
+eslint.config.js
+package.json
+package-lock.json
+playwright-report/
+test-results/

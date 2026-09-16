@@ -1,218 +1,163 @@
 # PiscinaPro — Backend (Supabase)
 
-Backend relacional em PostgreSQL (Supabase), criado do zero espelhando o domínio do app.
-
-## Conexão
+PostgreSQL + Auth + Realtime + Storage + Edge Functions.
 
 | | |
 |---|---|
-| **Projeto** | `piscinapro` |
-| **Ref / ID** | `tczczahhibqnojlptpyx` |
-| **URL da API** | `https://tczczahhibqnojlptpyx.supabase.co` |
-| **Publishable key** | `sb_publishable_DBY4Ce1GPxTi5BwiGcSiGQ_5w3cZRs0` |
-| **Região** | `ca-central-1` (Postgres 17) |
+| **Projeto** | `PISCINAPRO` |
+| **Ref / ID** | `szjobipenlkfeunmtueh` |
+| **URL da API** | `https://szjobipenlkfeunmtueh.supabase.co` |
+| **Chave publicável** | em `src/core/config.js` (pública por definição; o acesso é controlado pelo RLS) |
+| **Região** | `us-west-2` (Postgres 17) |
 
-> A `service_role` key (segredo, ignora RLS) **não** fica aqui — pegue no painel do Supabase (Settings → API) e nunca a exponha no frontend.
+> **Nunca** coloque no frontend nem no repositório: `service_role`, `cron_secret`, `intake_key`, chave VAPID privada.
 
-## Segurança (RLS)
+---
 
-- **RLS habilitado em todas as 11 tabelas.**
-- Política única por tabela: **acesso total para usuários `authenticated`**. O papel `anon` **não** tem acesso.
-- Ou seja: só a publishable/anon key **não** lê nem escreve nada até haver uma **sessão de login (Supabase Auth)**. Isso é proposital (ferramenta interna).
-- Para usar no app é preciso autenticar (email/senha, magic link ou `signInAnonymously()`).
-- Pendência de config (não é do schema): **Leaked Password Protection** está desativada no Auth — dá pra ligar em Authentication → Policies. [Doc](https://supabase.com/docs/guides/auth/password-security)
+## 1. Estado atual do projeto
 
-## Schema
+Tudo o que está em `supabase/` **já foi aplicado** no projeto `szjobipenlkfeunmtueh` (projeto novo, criado vazio —
+os dados do projeto antigo não foram migrados).
 
-**Enums:** `lead_origem`, `lead_etapa`, `lead_temp`, `orcamento_status`, `pagamento_tipo`, `obra_etapa`.
+### 1.1 Migrations aplicadas
+| Arquivo | O que faz |
+|---|---|
+| `20260916115900_00_base_schema.sql` | Schema base consolidado (antigas 01–12): enums, tabelas comerciais e de operação, views, `app_config`, auditoria, push, catálogo inicial de modelos/adicionais |
+| `20260916120000_13_usuarios_permissoes.sql` | `perfis` ganha e-mail, permissões, limites e ativo; trigger cria o perfil quando o usuário nasce no Auth (**o primeiro vira admin**); funções `tem_perm`, `no_escopo`…; RPC `usuarios_resumo()` |
+| `20260916120100_14_rls_por_permissao.sql` | RLS de todas as tabelas comerciais/operação por permissão e escopo do vendedor; triggers de aprovação, reversão de venda e limite de desconto; tarefas com responsável e horário |
+| `20260916120200_15_financeiro_erp.sql` | ERP (`fin_contas`, `fin_categorias`, `fornecedores`, `fin_titulos`, `fin_movimentos`, `fin_parametros`), trigger de recálculo do título, RLS e plano de contas inicial |
+| `20260916120300_16_portal_assinatura_storage.sql` | `portal_tokens`, `assinaturas`, buckets `anexos`, `propostas`, `assinaturas`, `backups` e políticas de Storage |
+| `20260916120400_17_monitoramento_backup_realtime.sql` | `erros_app`, `backups_log`, `chamar_funcao_cron()`, agendamentos pg_cron e Realtime |
+| `20260916120500_18_endurecimento_advisors.sql` | Funções internas sem EXECUTE pela API, helpers de RLS só para `authenticated`, `pg_net` no schema `extensions` |
+| `20260916120600_19_desempenho_rls_indices.sql` | `(select auth.uid())` nas políticas, uma política permissiva por ação, índices nas chaves estrangeiras |
 
-**Tabelas (11):**
+Conferência feita: nenhuma tabela pública sem RLS; 84 políticas; 4 buckets; 21 tabelas no Realtime.
+
+### 1.2 Edge Functions publicadas
+`admin-users` (JWT), `portal`, `intake-lead`, `send-reminders` e `backup-diario` (sem JWT, protegidas por token
+ou segredo). Para publicar de novo:
+```bash
+supabase link --project-ref szjobipenlkfeunmtueh
+supabase functions deploy admin-users portal intake-lead send-reminders backup-diario
+```
+(`supabase/config.toml` já define `verify_jwt` de cada uma.)
+
+### 1.3 Agendamentos (pg_cron → `chamar_funcao_cron`)
+| Job | Quando (UTC) | Horário de Brasília |
+|---|---|---|
+| `backup-diario` | `0 6 * * *` | 03:00 todo dia |
+| `send-reminders` | `0 11-22 * * *` | de hora em hora, 08:00–19:00 |
+| `limpar-erros-app` | `30 6 * * 0` | domingo 03:30 (apaga erros com mais de 90 dias) |
+
+Os segredos (`supabase_url`, `cron_secret`, `intake_key`, VAPID) ficam em `app_config`, que a API nega a todos.
+
+### 1.4 Configuração do Auth (painel — fazer uma vez)
+1. *Authentication → Users → Add user → Create new user* (marque **Auto Confirm User**): crie a sua conta.
+   **O primeiro usuário criado vira administrador.** Os demais acessos são criados pela tela *Usuários* do app.
+2. *Authentication → Sign In / Providers → Email*: **desligar "Allow new users to sign up"**.
+3. *Authentication → URL Configuration*: *Site URL* = URL do Vercel; adicionar a mesma URL em *Redirect URLs*.
+4. *Authentication → Attack Protection*: ligar **Leaked Password Protection**.
+
+### 1.5 Conferência
+```sql
+select tablename from pg_tables where schemaname = 'public' and not rowsecurity;   -- vazio
+select tablename, count(*) from pg_policies where schemaname = 'public' group by 1 order by 1;
+select jobname, schedule from cron.job;
+select id, status_code, left(content, 120) from net._http_response order by id desc limit 5;  -- respostas do cron
+```
+
+### 1.6 Tipos
+`database.types.ts` foi gerado do projeto atual. Depois de novas migrations:
+`supabase gen types typescript --project-id szjobipenlkfeunmtueh > database.types.ts`.
+
+---
+
+## 2. Segurança (RLS)
+
+A fronteira de segurança é o banco. A interface só esconde o que o usuário não pode usar.
+
+- **Papéis:** `admin` (tudo) ou `usuario` (lista de permissões em `perfis.permissoes`). Catálogo em
+  `src/core/permissoes.js` e espelho em `supabase/functions/_shared/permissoes.ts` — um teste garante que as duas
+  listas e as strings usadas nas migrations batem.
+- **Escopo do vendedor:** sem `comercial.todos`, o usuário só lê/grava leads, propostas, clientes, obras e contratos
+  cujo `vendedor_id` é o dele (`perfis.vendedor_id`). `leads.sem_dono` libera os leads sem vendedor.
+- **Regras que dependem do valor anterior** ficam em triggers: aprovar proposta (`orcamentos.aprovar`), desfazer
+  aprovação ou reverter venda ganha (`clientes.cancelar`), desconto acima de `limites.desconto_max`.
+- **Perfis:** ninguém grava pela API pública. Criação pelo trigger do Auth; alterações pela Edge Function
+  `admin-users` (só admin ou `usuarios.gerir`; só admin concede `usuarios.gerir`/`sistema.ver` ou papel admin; o
+  sistema nunca fica sem administrador ativo).
+- **Anon:** sem acesso a nenhuma tabela. O portal do cliente passa pela Edge Function `portal` (service_role) com
+  link secreto que expira e pode ser revogado.
+
+---
+
+## 3. Modelo de dados
+
+**Comercial e operação:** `vendedores`, `equipes`, `modelos`, `adicionais`, `leads`, `lead_interacoes`, `orcamentos`,
+`orcamento_itens`, `obras`, `obra_notas`, `financeiro` (contrato de venda simples), `tarefas`, `perfis`, `auditoria`,
+`push_subscriptions`, `app_config` (segredos; negado a todos pela API).
+
+**ERP financeiro:**
 
 | Tabela | Papel |
 |---|---|
-| `vendedores` | consultores comerciais + `meta` mensal |
-| `equipes` | equipes de obra/instalação |
-| `modelos` | catálogo de piscinas (specs + preço base) |
-| `adicionais` | opcionais da proposta (valor, unidade, qtd padrão) |
-| `leads` | funil de vendas (FK → modelos, vendedores) |
-| `lead_interacoes` | timeline/histórico do lead (FK → leads, cascade) |
-| `orcamentos` | propostas (FK → leads, modelos, vendedores) |
-| `orcamento_itens` | adicionais de cada proposta (snapshot de valor) |
-| `obras` | pós-venda/instalação (1:1 com lead ganho) |
-| `obra_notas` | notas de execução da obra |
-| `financeiro` | recebíveis, parcelas, comissões (1:1 com lead ganho) |
-| `perfis` | 1:1 com `auth.users` → vendedor + papel (identidade/atribuição) |
-| `tarefas` | follow-ups/lembretes (opcionalmente ligados a um lead) |
+| `fin_contas` | caixas, bancos, cartões e aplicações, com saldo inicial e data |
+| `fin_categorias` | plano de contas; `grupo` define a linha do DRE |
+| `fornecedores` | cadastro de fornecedores e prestadores |
+| `fin_titulos` | contas a receber e a pagar: parcelas (`grupo_id`), recorrência, competência, desconto/acréscimo, vínculo com cliente/obra (`lead_id`), vendedor (comissão) e origem (`manual`, `contrato`, `comissao`, `recorrencia`) |
+| `fin_movimentos` | entradas e saídas realizadas; baixa de título (`titulo_id`), transferências (`transferencia_id`), conciliação |
+| `fin_parametros` | base da comissão (`venda`/`recebimento`), dia de pagamento, gerar títulos ao fechar venda |
 
-**Views (respeitam RLS via `security_invoker`):**
-- `vw_metas_vendedor` — realizado × meta, pipeline e leads ativos por vendedor.
-- `vw_funil_resumo` — contagem e valor por etapa do funil.
+`valor_pago`, `status` e `pago_em` do título são recalculados por trigger a cada movimento — o app faz o mesmo
+cálculo localmente (`src/core/financeiro.js`, testado).
 
-**Extras:** `updated_at` automático via trigger `set_updated_at()`, índices em todas as FKs e filtros comuns (etapa, status, temperatura), constraints de integridade (checks de faixa, `not null`, `unique`).
+**Portal e arquivos:** `portal_tokens`, `assinaturas` (nome, documento, IP, user agent, hash SHA-256 do conteúdo da
+proposta e imagem da assinatura), `erros_app`, `backups_log`. Buckets privados: `anexos`, `propostas`, `assinaturas`, `backups`.
 
-## Seed (dados de demonstração)
+**Views:** `vw_metas_vendedor`, `vw_funil_resumo` (`security_invoker`, respeitam o RLS).
 
-4 vendedores · 4 equipes · 6 modelos · 12 adicionais · 14 leads · 32 interações · 3 orçamentos (7 itens) · 2 obras (2 notas) · 2 contratos financeiros.
+---
 
-## Migrations aplicadas
+## 4. Edge Functions
 
-1. `01_schema_piscinapro` — enums, tabelas, triggers, índices
-2. `02_rls_policies` — RLS + políticas `authenticated`
-3. `03_reporting_views` — views de relatório
-4. `04_drop_legacy_erp_keep_piscinapro` — remoção do ERP legado (ver nota abaixo)
+| Função | Acesso | Papel |
+|---|---|---|
+| `admin-users` | JWT de admin ou `usuarios.gerir` | listar, criar (senha provisória ou convite, com opção de cadastrar o vendedor), alterar permissões/limites/vendedor/papel, desativar, nova senha, link de recuperação, excluir |
+| `portal` | pública, por token | carrega propostas, obra, fotos e parcelas; registra a assinatura eletrônica e aprova a proposta |
+| `backup-diario` | `x-cron-secret` | exporta todas as tabelas em JSON gzip para o bucket `backups` (retenção de 35 dias) |
+| `intake-lead` | `x-intake-key` | cria lead a partir do site/WhatsApp/anúncios |
+| `send-reminders` | `x-cron-secret` | Web Push de follow-ups vencidos |
 
-## Nota importante (ERP legado removido)
-
-Este projeto continha um **ERP/CRM de terceiros com dados reais** (51 tabelas: customers, orders, products, invoices, receivables, suppliers, warehouses, profiles…). A pedido explícito e confirmado do usuário, **todo esse ERP foi apagado** para o projeto ficar somente com o PiscinaPro. **Essa ação foi irreversível.**
-
-## Integração com o app (FEITO — `supabase.js`)
-
-O frontend **já está conectado** ao Supabase pela camada [`supabase.js`](supabase.js), carregada
-depois de `app.js`/`orcamentos.js`. Arquitetura (sem build, sem framework):
-
-- **Cache offline:** o app continua 100% síncrono em memória e usa o `localStorage` como
-  cache/fallback. Toda a UX é instantânea; o Supabase é a fonte da verdade.
-- **Portão de login:** como o RLS só libera `authenticated`, ao abrir o app aparece uma tela de
-  login (Supabase Auth, email/senha). Há um "Continuar offline" que usa só o cache local.
-  A sessão é persistida (sobrevive a reload) — nas próximas vezes entra direto.
-- **Hidratação (banco → memória):** após logar, o app puxa as 11 tabelas, converte para o formato
-  nativo do app (leads desnormalizados, orçamentos, obras/financeiro por cliente, config) e reusa
-  os loaders existentes. Os nomes de modelo/vendedor/equipe são resolvidos a partir dos UUIDs.
-- **Write-through (memória → banco):** toda escrita passa pelo único ponto `persist(key, value)`
-  do `app.js`; `supabase.js` intercepta esse seam (`window.Supa.onPersist`) e reconcilia a tabela
-  correspondente (upsert + remoção do que sumiu), com debounce. Os ids gerados no app agora são
-  UUID v4 (`uid()`), alinhando com as PKs do Postgres.
-- **Indicador de status:** um "pill" no canto inferior direito mostra Online / Sincronizando /
-  Offline / Erro.
-
-**Config no topo de `supabase.js`:** `url`, `key` (publishable) e a CDN da lib. A `service_role`
-**nunca** entra no frontend.
-
-Rodar localmente (precisa de um servidor HTTP por causa do `import()` de módulo — não abra por
-`file://`):
-
-```bash
-node .claude/static-server.js   # http://localhost:5177
-```
-
-Regerar os tipos TypeScript: painel do Supabase (API Docs → Tables) ou `supabase gen types typescript --project-id tczczahhibqnojlptpyx`.
-
-## Recursos adicionais (frontend)
-
-Implementados sobre a integração, todos em `supabase.js` (exceto o WhatsApp, em `orcamentos.js`):
-
-- **Realtime:** o app assina `postgres_changes` (canal `piscinapro-db`) e re-hidrata sozinho quando
-  outro usuário altera algo — sem recarregar. Ecos das próprias escritas são ignorados por uma
-  janela de "mute"; a atualização espera modal/drawer/painel abertos fecharem para não atropelar
-  edição. Requer as tabelas na publicação `supabase_realtime` (migration `06`).
-- **Identidade:** ao logar, garante um `perfis` para `auth.uid()`, mostra o usuário no rodapé da
-  sidebar e um seletor "sou o vendedor…" que grava `perfis.vendedor_id` — habilitando o atalho
-  **"meus leads"** no painel de notificações.
-- **Follow-ups (sino):** painel de notificações com **leads parados** (sem interação há 5+ dias,
-  calculado do estado em memória) e **tarefas** (`tarefas`) com vencimento — criar, concluir e
-  remover. Funciona offline em modo leitura (leads parados vêm do cache; criar exige login).
-- **WhatsApp na proposta:** botão que abre o chat do cliente com uma mensagem pronta referenciando
-  a proposta (o envio é feito pelo vendedor).
-- **Relatórios do servidor:** a tela de Relatórios ganhou o card **"Metas por vendedor · servidor"**,
-  alimentado pelas views `vw_metas_vendedor` / `vw_funil_resumo` (numeração feita no banco). Puxadas
-  na hidratação e expostas em `window.__supaViews`; offline mostram um aviso e somem graciosamente.
-- **PWA instalável:** `manifest.json` + `sw.js` (service worker) + `icon.svg`. App shell
-  **network-first** (sempre pega a versão nova online; cache só como fallback offline — evita
-  código velho após deploy), CDN da lib/fontes em cache runtime, e **API do Supabase sempre pela
-  rede** (nunca cacheia dados). Instalável no desktop e no celular; requer http/https (não `file://`).
-- **Drag & drop em Obras:** os cards da tela Obras & Instalação são arrastáveis entre as etapas
-  (mesmo padrão mouse+toque do funil de leads); soltar chama `moverObra`, que grava a etapa e
-  sincroniza. Ver `bindObraDnD` em `app.js`.
-- **Drag & drop em Orçamentos:** a tela de Orçamentos ganhou um toggle **Lista ⇄ Quadro**; no
-  quadro (kanban por status), arrastar move a proposta entre rascunho/enviado/aprovado/recusado.
-  Soltar em "Aprovado" também marca o lead como ganho. Ver `orcRenderBoard`/`bindOrcDnD` em
-  `orcamentos.js`.
-- **Exportar CSV:** na tela de Relatórios, botões para exportar **Leads, Clientes e Funil** em CSV
-  (separador `;` + BOM UTF-8, abre no Excel pt-BR). Ver `exportLeadsCSV` etc. em `app.js`.
-- **Anexos/fotos (Storage):** bucket privado `anexos` (migration `07`); no drawer de obra dá pra
-  enviar fotos (terreno/andamento) e o contrato em PDF, com galeria e remoção. URLs assinadas
-  (1h). Ver `mountAnexos` em `supabase.js`. Só online.
-- **Lembretes (notificações):** botão "🔔 lembretes" no sino pede permissão e passa a **notificar
-  follow-ups vencidos** (checagem de minuto em minuto) enquanto o app está aberto/em segundo plano.
-  O `sw.js` já tem handlers de `push`/`notificationclick` prontos para push do servidor. Para
-  notificação com o app **fechado** falta o trio VAPID + Edge Function + `pg_cron` (não incluso).
-
-## Migrations adicionais (cont.)
-
-7. `07_storage_anexos` — bucket privado `anexos` + policies `authenticated` em `storage.objects`
-
-> Nota de RLS: mantive o acesso **team-wide** (`authenticated` vê tudo), que é o desenho da
-> ferramenta — todos os painéis (metas por vendedor, funil geral, financeiro) agregam dados de
-> **todos**. Travar linhas por dono quebraria esses relatórios; por isso a atribuição é por
-> `perfis.vendedor_id` + filtro no app, não por política que esconde linhas.
-
-## Migrations adicionais
-
-5. `05_perfis_e_tarefas` — tabelas `perfis` e `tarefas` (+ RLS `authenticated`, índices, trigger)
-6. `06_realtime_publication` — adiciona todas as tabelas à publicação `supabase_realtime`
-
-- **Analytics com período:** card **"Comparativo do mês"** em Relatórios — leads novos, vendas
-  ganhas, contratos e propostas do mês atual × anterior, com variação %. Ver `renderComparativo`.
-- **Papéis & permissões:** `perfis.papel` (`admin`/`consultor`). O dono (`OWNER_EMAIL`) e o 1º
-  usuário viram admin; os demais, consultor. Consultor vê **Configurações em modo leitura** e não
-  exclui orçamento nem cancela venda. É camada de UX (a fronteira dura é o RLS). `Supa.isAdmin()`.
-- **Captação de leads (Edge Function `intake-lead`, pública):** `POST /functions/v1/intake-lead`
-  com header `x-intake-key`. Cria lead + interação; resolve modelo por nome; origem validada.
-  Como `leads` está no Realtime, o lead aparece **na hora** no app. Segredo em `app_config.intake_key`.
-- **Web Push (app fechado):** chaves VAPID em `app_config`; assinaturas em `push_subscriptions`;
-  Edge Function `send-reminders` (protegida por `app_config.cron_secret`) envia push de follow-ups
-  vencidos via `npm:web-push`; `pg_cron` chama de hora em hora (11–22 UTC) por `pg_net`. O cliente
-  se inscreve ao ativar "🔔 lembretes". `push_em` evita repetir o aviso no mesmo dia.
-
-### Como plugar a captação no seu site
-
+### Captação de leads pelo site
 ```html
 <script>
-fetch('https://tczczahhibqnojlptpyx.supabase.co/functions/v1/intake-lead', {
+fetch('https://szjobipenlkfeunmtueh.supabase.co/functions/v1/intake-lead', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'x-intake-key': 'SUA_INTAKE_KEY' },
   body: JSON.stringify({ nome, telefone, email, cidade, origem: 'site', modelo, observacoes }),
 });
 </script>
 ```
+Pegue a chave com `select valor from app_config where chave = 'intake_key';` (painel). Se ela já esteve em algum
+arquivo publicado, gere outra: `update app_config set valor = encode(extensions.gen_random_bytes(24), 'hex') where chave = 'intake_key';`
 
-> Pegue a `intake_key` e os segredos com: `select chave, valor from app_config;` (só via painel/
-> service_role). **Não** exponha `cron_secret`, `vapid_private` nem `service_role` no frontend.
+---
 
-- **Testes automatizados:** `pure.js` (utilidades puras: telefone/CSV) com suíte em
-  `tests/pure.test.mjs`. Rodar: **`npm test`** (15 casos, sem dependências).
-- **Validação + máscara + anti-duplicidade:** o cadastro de lead mascara o telefone ao digitar,
-  valida DDD+número e **avisa se já existe lead com o mesmo telefone** (via `PP.phoneKeyPure`).
-- **Fila offline persistente:** as tabelas com escrita pendente são guardadas em `localStorage`
-  (`piscinapro_dirty`) e **drenadas no próximo login, antes da hidratação** — edições feitas
-  offline não são mais perdidas ao recarregar.
-- **Auditoria:** tabela `auditoria` (migration `12`) + `Supa.logAudit`; registra criar/mover/
-  aprovar/cancelar/importar (lead, orçamento, obra, venda). Aparece em **"Atividade recente"** no
-  sino, ao vivo (Realtime).
-- **Papéis (reforço):** consultor não importa/edita config nem exclui; admin sim.
-- **E-mail da proposta:** botão **E-mail** na proposta abre o cliente de e-mail com assunto/corpo
-  prontos (o vendedor anexa o PDF gerado e envia) — irmão do botão WhatsApp.
-- **Import de leads via CSV:** em Relatórios, **"Importar leads"** lê um CSV (colunas por cabeçalho),
-  ignora duplicados por telefone e cria os leads. Contraparte do export.
-- **Dark mode:** toggle ☀/🌙 na topbar; tema salvo em `localStorage` e aplicado sem flash (script
-  no `<head>`). Paleta escura por variáveis (`:root[data-theme="dark"]`).
+## 5. Como o app conversa com o banco
 
-## Edge Functions
+- **Offline-first:** o estado fica em memória e no `localStorage`; a interface nunca espera a rede.
+- **Sincronização por diferença** (`src/data/sync.js`): guarda um hash por linha da última sincronização e envia só
+  o que mudou; só apaga no servidor o que existia no último snapshot e foi removido localmente. Registros de outros
+  usuários ou fora do seu escopo nunca são apagados.
+- **Fila persistente:** alterações feitas sem conexão ficam em `piscinapro_dirty` e sobem no próximo login.
+- **Permissão negada** (RLS/trigger): a alteração local é descartada, a fatia é recarregada do servidor e aparece um aviso.
+- **Realtime:** mudanças de outros usuários recarregam só a parte afetada, sem atropelar formulários abertos.
+- **Paginação:** leituras de 1.000 em 1.000 linhas (limite padrão do PostgREST).
+- **Ao sair:** o cache do usuário é apagado do aparelho.
 
-| Função | Auth | Papel |
-|---|---|---|
-| `intake-lead` | pública (`x-intake-key`) | cria lead a partir do site/WhatsApp/Ads |
-| `send-reminders` | `x-cron-secret` | envia Web Push de follow-ups vencidos (via pg_cron) |
+---
 
-## Migrations adicionais (cont.)
+## 6. Histórico de migrations
 
-8. `08_intake_e_push` — `app_config`, `push_subscriptions`, `tarefas.push_em`
-9. `09_vapid_cron_config` — chaves VAPID + `cron_secret`; habilita `pg_net`/`pg_cron`
-10. `10_cron_send_reminders` — agenda `send-reminders` (`0 11-22 * * *`)
-11. `11_app_config_deny_policy` — nega explicitamente anon/authenticated em `app_config`
-12. `12_auditoria` — tabela `auditoria` (+ RLS, índice, Realtime)
-
-## Pendências de segurança (advisors)
-
-- **Leaked Password Protection** continua desativada no Auth. Ligue em Authentication → Policies.
-  [Doc](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)
+O projeto antigo tinha 12 migrations aplicadas pelo painel e nunca versionadas. No projeto novo elas foram
+consolidadas em `00_base_schema`; em seguida vieram 13–19 (seção 1.1). Todas estão em `supabase/migrations/`.
