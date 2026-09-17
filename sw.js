@@ -5,21 +5,35 @@
    - fontes do Google: cache-first
    - API do Supabase: nunca passa pelo cache
    ============================================================ */
-const VERSAO = 'piscinapro-v5';
+const VERSAO = 'piscinapro-v8';
 const SHELL = `${VERSAO}-shell`;
 const RUNTIME = `${VERSAO}-runtime`;
 
 const SHELL_ASSETS = [
   './',
   './index.html',
-  './portal.html',
   './styles.css',
-  './styles-v2.css',
   './manifest.json',
   './icon.svg',
-  './vendor/supabase.umd.js',
-  './src/tema-inicial.js',
-  './src/main.js',
+  './vendor/supabase.js',
+  './js/tema-inicial.js',
+  './js/pure.js',
+  './js/sync-diff.js',
+  './js/proposta-html.js',
+  './js/nucleo.js',
+  './js/acoes.js',
+  './js/telas/painel.js',
+  './js/telas/leads.js',
+  './js/telas/clientes.js',
+  './js/telas/obras.js',
+  './js/telas/financeiro.js',
+  './js/telas/relatorios.js',
+  './js/telas/configuracoes.js',
+  './js/telas/usuarios.js',
+  './js/backup.js',
+  './js/orcamentos.js',
+  './js/ui.js',
+  './js/supabase.js',
 ];
 
 self.addEventListener('install', event => {
@@ -48,7 +62,7 @@ self.addEventListener('fetch', event => {
 
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req).catch(async () => (await caches.match(req)) || caches.match(url.pathname.endsWith('portal.html') ? './portal.html' : './index.html'))
+      fetch(req).catch(async () => (await caches.match(req)) || caches.match('./index.html'))
     );
     return;
   }

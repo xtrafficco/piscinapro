@@ -1,0 +1,27 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: 'Manrope', system-ui, sans-serif; background: #eef4f3; color: #1a3438; }
+.pp-topo { background: linear-gradient(150deg, #0e343d, #06202a); color: #fff; padding: 16px 20px; display: flex; align-items: baseline; gap: 12px; }
+.pp-marca { font-family: 'Fraunces', Georgia, serif; font-size: 22px; font-weight: 600; }
+.pp-marca b { color: #7fe0d6; font-weight: 600; }
+.pp-sub { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #8fb3b1; }
+.pp-main { max-width: 820px; margin: 0 auto; padding: 16px 12px 40px; }
+.pp-aviso { background: #fff; border-radius: 14px; padding: 28px 22px; text-align: center; font-size: 15px; color: #3a5a5e; box-shadow: 0 10px 30px -18px rgba(9,42,46,.35); }
+.pp-aviso h2 { font-family: 'Fraunces', Georgia, serif; margin: 0 0 6px; color: #0c2a2e; }
+.pp-doc { width: 100%; border: 0; display: block; min-height: 600px; background: transparent; }
+.pp-acoes { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 6px 0 16px; }
+.pp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 20px; border-radius: 11px; border: 0; cursor: pointer; font: 700 14px/1 'Manrope', system-ui, sans-serif; text-decoration: none; }
+.pp-btn.primario { background: linear-gradient(160deg, #12b0a6, #0a8a89); color: #fff; }
+.pp-btn.secundario { background: #fff; color: #0c2a2e; border: 1px solid #cfdcda; }
+.pp-btn:disabled { opacity: .6; cursor: default; }
+.pp-cartao { background: #fff; border-radius: 16px; padding: 22px; box-shadow: 0 10px 30px -18px rgba(9,42,46,.35); margin-top: 8px; }
+.pp-cartao h2 { font-family: 'Fraunces', Georgia, serif; font-size: 20px; margin: 0 0 4px; color: #0c2a2e; }
+.pp-cartao p { margin: 0 0 14px; font-size: 13.5px; color: #4a6b6e; }
+.pp-campo { display: block; margin-bottom: 12px; }
+.pp-campo span { display: block; font-size: 12px; font-weight: 700; color: #475f63; margin-bottom: 5px; }
+.pp-campo input[type="text"] { width: 100%; height: 44px; border: 1px solid #cfdcda; border-radius: 10px; padding: 0 12px; font-size: 16px; }
+.pp-campo input:focus { outline: 2px solid #7fe0d6; border-color: #12b0a6; }
+.pp-check { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; margin: 6px 0 16px; line-height: 1.45; }
+.pp-check input { margin-top: 3px; width: 18px; height: 18px; accent-color: #12b0a6; flex: none; }
+.pp-erro { color: #c2462a; font-size: 13px; min-height: 18px; margin-bottom: 8px; }
+.pp-ok { background: #e2f7ef; border: 1px solid #9fdcc3; color: #0f7a54; border-radius: 12px; padding: 14px 16px; font-size: 14px; text-align: center; }
+.pp-rodape { text-align: center; font-size: 12px; color: #6b8588; padding: 18px; }

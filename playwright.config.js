@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Localmente usa o Edge instalado (sem baixar navegador); no CI, o Chromium do Playwright.
+const canal = process.env.CI ? {} : { channel: 'msedge' };
+
 export default defineConfig({
   testDir: 'e2e',
   timeout: 45000,
@@ -16,7 +19,7 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
   },
   projects: [
-    { name: 'desktop', use: { ...devices['Desktop Chrome'] }, grepInvert: /@mobile/ },
-    { name: 'celular', use: { ...devices['Pixel 7'] }, grep: /@mobile/ },
+    { name: 'desktop', use: { ...devices['Desktop Chrome'], ...canal }, grepInvert: /@mobile/ },
+    { name: 'celular', use: { ...devices['Pixel 7'], ...canal }, grep: /@mobile/ },
   ],
 });

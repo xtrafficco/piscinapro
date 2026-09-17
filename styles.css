@@ -868,3 +868,35 @@ h1,h2,h3,h4 { font-weight: 600; color: var(--t-strong); line-height: 1.15; }
     scroll-behavior: auto !important;
   }
 }
+
+/* ============================================================
+   Parcelas (contas a receber)
+   ============================================================ */
+.pay-row { align-items: center; }
+.pay-main { flex: 1; min-width: 0; }
+.pay-edit { display: flex; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
+.pay-edit input { height: 30px; border: 1px solid var(--line); border-radius: 8px; padding: 0 8px; font-size: 12px; background: var(--surface); color: var(--t); }
+.pay-edit input[type="date"] { width: 138px; }
+.pay-edit input.num { width: 104px; text-align: right; }
+.pay-acoes { display: flex; align-items: center; gap: 6px; margin-left: auto; flex: none; }
+.pay-row.parcial em { color: var(--warm); }
+
+/* ============================================================
+   Relatório do período (servidor)
+   ============================================================ */
+.rel-servidor { margin-bottom: 18px; }
+.rel-periodo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rel-periodo input { height: 32px; border: 1px solid var(--line); border-radius: 8px; padding: 0 8px; font-size: 12.5px; background: var(--surface); color: var(--t); }
+.rel-periodo span { font-size: 12px; color: var(--t-muted); }
+.rel-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.rel-bloco { overflow-x: auto; margin-top: 8px; }
+.rel-bloco h3 { font-size: 13px; font-weight: 700; color: var(--t-strong); margin: 6px 0 8px; }
+.rel-tbl { min-width: 0; }
+.rel-tbl td, .rel-tbl th { padding: 8px 10px; }
+.rel-tbl tbody tr { cursor: default; }
+@media (max-width: 900px) { .rel-grid { grid-template-columns: 1fr; } }
+
+/* o atributo hidden sempre esconde (componentes com display próprio, como .nav-item, o anulariam) */
+[hidden] { display: none !important; }
+/* modal aberto a partir de uma gaveta (ex.: registrar recebimento) fica por cima dela */
+.modal { z-index: 102; }

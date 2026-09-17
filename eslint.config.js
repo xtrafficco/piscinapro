@@ -2,23 +2,23 @@ import js from '@eslint/js';
 import globals from 'globals';
 
 export default [
-  { ignores: ['vendor/**', 'node_modules/**', 'supabase/functions/**', 'playwright-report/**', 'test-results/**'] },
+  { ignores: ['node_modules/**', 'vendor/**', 'supabase/functions/**', 'playwright-report/**', 'test-results/**'] },
   js.configs.recommended,
   {
-    files: ['src/**/*.js'],
-    languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: { ...globals.browser } },
+    // scripts clássicos do navegador: compartilham funções e constantes globais entre si
+    files: ['js/**/*.js'],
+    languageOptions: { ecmaVersion: 2023, sourceType: 'script', globals: { ...globals.browser, module: 'readonly' } },
     rules: {
-      'no-unused-vars': ['error', { args: 'none', caughtErrors: 'none', varsIgnorePattern: '^_' }],
-      'no-undef': 'error',
+      'no-undef': 'off',
+      'no-unused-vars': 'off',
+      'no-redeclare': 'off',
       'no-empty': ['error', { allowEmptyCatch: true }],
       eqeqeq: ['error', 'smart'],
       'no-var': 'error',
-      'prefer-const': ['error', { destructuring: 'all' }],
     },
   },
   {
-    files: ['src/tema-inicial.js'],
-    languageOptions: { sourceType: 'script', globals: { ...globals.browser } },
+    files: ['js/tema-inicial.js', 'js/pure.js', 'js/sync-diff.js'],
     rules: { 'no-var': 'off' },
   },
   {

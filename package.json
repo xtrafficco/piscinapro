@@ -1,9 +1,9 @@
 {
   "name": "piscinapro",
-  "version": "2.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
-  "description": "CRM + ERP de vendas, obras e financeiro para empresas de piscinas (vanilla JS + Supabase).",
+  "description": "CRM de vendas, orçamentos, obras e financeiro para empresas de piscinas (vanilla JS + Supabase).",
   "scripts": {
     "serve": "node scripts/serve.mjs",
     "vendor": "node scripts/vendor.mjs",
@@ -15,8 +15,11 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.63.0",
+    "@supabase/supabase-js": "2.116.0",
     "eslint": "10.10.0",
-    "globals": "17.12.0"
+    "globals": "17.12.0",
+    "html2canvas": "1.4.1",
+    "jspdf": "4.2.1"
   },
   "engines": {
     "node": ">=20"

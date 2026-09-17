@@ -1,10 +1,8 @@
 // ============================================================
 // PiscinaPro — Tipos TypeScript do schema Supabase
-// Gerado de: projeto szjobipenlkfeunmtueh (public), migrations 00–19
-// Regerar: supabase gen types typescript --project-id szjobipenlkfeunmtueh
-// Uso: createClient<Database>(url, key)
+// Gerado de: projeto szjobipenlkfeunmtueh (public),
+// migrations 20260917000000_reconstrucao_schema_app e 20260917100000_melhorias
 // ============================================================
-
 export type Json =
   | string
   | number
@@ -29,6 +27,7 @@ export type Database = {
           nome: string
           qtd_padrao: number
           unidade: string
+          updated_at: string
           valor: number
         }
         Insert: {
@@ -38,6 +37,7 @@ export type Database = {
           nome: string
           qtd_padrao?: number
           unidade?: string
+          updated_at?: string
           valor?: number
         }
         Update: {
@@ -47,6 +47,7 @@ export type Database = {
           nome?: string
           qtd_padrao?: number
           unidade?: string
+          updated_at?: string
           valor?: number
         }
         Relationships: []
@@ -68,66 +69,6 @@ export type Database = {
           valor?: string
         }
         Relationships: []
-      }
-      assinaturas: {
-        Row: {
-          aceite_texto: string
-          assinado_em: string
-          documento: string | null
-          email: string | null
-          hash_documento: string
-          id: string
-          imagem_path: string
-          ip: string | null
-          nome: string
-          orcamento_id: string
-          token: string | null
-          user_agent: string | null
-        }
-        Insert: {
-          aceite_texto: string
-          assinado_em?: string
-          documento?: string | null
-          email?: string | null
-          hash_documento: string
-          id?: string
-          imagem_path: string
-          ip?: string | null
-          nome: string
-          orcamento_id: string
-          token?: string | null
-          user_agent?: string | null
-        }
-        Update: {
-          aceite_texto?: string
-          assinado_em?: string
-          documento?: string | null
-          email?: string | null
-          hash_documento?: string
-          id?: string
-          imagem_path?: string
-          ip?: string | null
-          nome?: string
-          orcamento_id?: string
-          token?: string | null
-          user_agent?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "assinaturas_orcamento_id_fkey"
-            columns: ["orcamento_id"]
-            isOneToOne: false
-            referencedRelation: "orcamentos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "assinaturas_token_fkey"
-            columns: ["token"]
-            isOneToOne: false
-            referencedRelation: "portal_tokens"
-            referencedColumns: ["token"]
-          },
-        ]
       }
       auditoria: {
         Row: {
@@ -192,378 +133,23 @@ export type Database = {
           created_at: string
           id: string
           nome: string
+          updated_at: string
         }
         Insert: {
           ativo?: boolean
           created_at?: string
           id?: string
           nome: string
+          updated_at?: string
         }
         Update: {
           ativo?: boolean
           created_at?: string
           id?: string
           nome?: string
-        }
-        Relationships: []
-      }
-      erros_app: {
-        Row: {
-          contexto: Json | null
-          created_at: string
-          id: number
-          mensagem: string
-          stack: string | null
-          url: string | null
-          user_agent: string | null
-          user_id: string | null
-          versao: string | null
-        }
-        Insert: {
-          contexto?: Json | null
-          created_at?: string
-          id?: never
-          mensagem: string
-          stack?: string | null
-          url?: string | null
-          user_agent?: string | null
-          user_id?: string | null
-          versao?: string | null
-        }
-        Update: {
-          contexto?: Json | null
-          created_at?: string
-          id?: never
-          mensagem?: string
-          stack?: string | null
-          url?: string | null
-          user_agent?: string | null
-          user_id?: string | null
-          versao?: string | null
-        }
-        Relationships: []
-      }
-      fin_categorias: {
-        Row: {
-          ativo: boolean
-          created_at: string
-          grupo: string
-          id: string
-          nome: string
-          tipo: string
-          updated_at: string
-        }
-        Insert: {
-          ativo?: boolean
-          created_at?: string
-          grupo?: string
-          id?: string
-          nome: string
-          tipo: string
-          updated_at?: string
-        }
-        Update: {
-          ativo?: boolean
-          created_at?: string
-          grupo?: string
-          id?: string
-          nome?: string
-          tipo?: string
           updated_at?: string
         }
         Relationships: []
-      }
-      fin_contas: {
-        Row: {
-          agencia: string | null
-          ativo: boolean
-          banco: string | null
-          cor: string
-          created_at: string
-          id: string
-          nome: string
-          numero: string | null
-          saldo_inicial: number
-          saldo_inicial_em: string
-          tipo: string
-          updated_at: string
-        }
-        Insert: {
-          agencia?: string | null
-          ativo?: boolean
-          banco?: string | null
-          cor?: string
-          created_at?: string
-          id?: string
-          nome: string
-          numero?: string | null
-          saldo_inicial?: number
-          saldo_inicial_em?: string
-          tipo?: string
-          updated_at?: string
-        }
-        Update: {
-          agencia?: string | null
-          ativo?: boolean
-          banco?: string | null
-          cor?: string
-          created_at?: string
-          id?: string
-          nome?: string
-          numero?: string | null
-          saldo_inicial?: number
-          saldo_inicial_em?: string
-          tipo?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      fin_movimentos: {
-        Row: {
-          categoria_id: string | null
-          conciliado: boolean
-          conta_id: string
-          created_at: string
-          criado_por: string | null
-          data: string
-          descricao: string
-          forma_pagamento: string | null
-          fornecedor_id: string | null
-          id: string
-          lead_id: string | null
-          tipo: string
-          titulo_id: string | null
-          transferencia_id: string | null
-          updated_at: string
-          valor: number
-        }
-        Insert: {
-          categoria_id?: string | null
-          conciliado?: boolean
-          conta_id: string
-          created_at?: string
-          criado_por?: string | null
-          data?: string
-          descricao: string
-          forma_pagamento?: string | null
-          fornecedor_id?: string | null
-          id?: string
-          lead_id?: string | null
-          tipo: string
-          titulo_id?: string | null
-          transferencia_id?: string | null
-          updated_at?: string
-          valor: number
-        }
-        Update: {
-          categoria_id?: string | null
-          conciliado?: boolean
-          conta_id?: string
-          created_at?: string
-          criado_por?: string | null
-          data?: string
-          descricao?: string
-          forma_pagamento?: string | null
-          fornecedor_id?: string | null
-          id?: string
-          lead_id?: string | null
-          tipo?: string
-          titulo_id?: string | null
-          transferencia_id?: string | null
-          updated_at?: string
-          valor?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fin_movimentos_categoria_id_fkey"
-            columns: ["categoria_id"]
-            isOneToOne: false
-            referencedRelation: "fin_categorias"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fin_movimentos_conta_id_fkey"
-            columns: ["conta_id"]
-            isOneToOne: false
-            referencedRelation: "fin_contas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fin_movimentos_fornecedor_id_fkey"
-            columns: ["fornecedor_id"]
-            isOneToOne: false
-            referencedRelation: "fornecedores"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fin_movimentos_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "leads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fin_movimentos_titulo_id_fkey"
-            columns: ["titulo_id"]
-            isOneToOne: false
-            referencedRelation: "fin_titulos"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      fin_parametros: {
-        Row: {
-          chave: string
-          updated_at: string
-          valor: Json
-        }
-        Insert: {
-          chave: string
-          updated_at?: string
-          valor: Json
-        }
-        Update: {
-          chave?: string
-          updated_at?: string
-          valor?: Json
-        }
-        Relationships: []
-      }
-      fin_titulos: {
-        Row: {
-          acrescimo: number
-          categoria_id: string | null
-          competencia: string | null
-          conta_id: string | null
-          created_at: string
-          criado_por: string | null
-          desconto: number
-          descricao: string
-          documento: string | null
-          emissao: string
-          forma_pagamento: string | null
-          fornecedor_id: string | null
-          grupo_id: string | null
-          id: string
-          lead_id: string | null
-          observacoes: string | null
-          origem: string
-          pago_em: string | null
-          parcela: number
-          parcelas: number
-          recorrente: string | null
-          status: string
-          tipo: string
-          updated_at: string
-          valor: number
-          valor_pago: number
-          vencimento: string
-          vendedor_id: string | null
-        }
-        Insert: {
-          acrescimo?: number
-          categoria_id?: string | null
-          competencia?: string | null
-          conta_id?: string | null
-          created_at?: string
-          criado_por?: string | null
-          desconto?: number
-          descricao: string
-          documento?: string | null
-          emissao?: string
-          forma_pagamento?: string | null
-          fornecedor_id?: string | null
-          grupo_id?: string | null
-          id?: string
-          lead_id?: string | null
-          observacoes?: string | null
-          origem?: string
-          pago_em?: string | null
-          parcela?: number
-          parcelas?: number
-          recorrente?: string | null
-          status?: string
-          tipo: string
-          updated_at?: string
-          valor: number
-          valor_pago?: number
-          vencimento: string
-          vendedor_id?: string | null
-        }
-        Update: {
-          acrescimo?: number
-          categoria_id?: string | null
-          competencia?: string | null
-          conta_id?: string | null
-          created_at?: string
-          criado_por?: string | null
-          desconto?: number
-          descricao?: string
-          documento?: string | null
-          emissao?: string
-          forma_pagamento?: string | null
-          fornecedor_id?: string | null
-          grupo_id?: string | null
-          id?: string
-          lead_id?: string | null
-          observacoes?: string | null
-          origem?: string
-          pago_em?: string | null
-          parcela?: number
-          parcelas?: number
-          recorrente?: string | null
-          status?: string
-          tipo?: string
-          updated_at?: string
-          valor?: number
-          valor_pago?: number
-          vencimento?: string
-          vendedor_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fin_titulos_categoria_id_fkey"
-            columns: ["categoria_id"]
-            isOneToOne: false
-            referencedRelation: "fin_categorias"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fin_titulos_conta_id_fkey"
-            columns: ["conta_id"]
-            isOneToOne: false
-            referencedRelation: "fin_contas"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fin_titulos_fornecedor_id_fkey"
-            columns: ["fornecedor_id"]
-            isOneToOne: false
-            referencedRelation: "fornecedores"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fin_titulos_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "leads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fin_titulos_vendedor_id_fkey"
-            columns: ["vendedor_id"]
-            isOneToOne: false
-            referencedRelation: "vendedores"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fin_titulos_vendedor_id_fkey"
-            columns: ["vendedor_id"]
-            isOneToOne: false
-            referencedRelation: "vw_metas_vendedor"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       financeiro: {
         Row: {
@@ -571,13 +157,11 @@ export type Database = {
           comissao_pct: number
           created_at: string
           entrada: number
-          entrada_paga: boolean
           financiado: number
           id: string
           lead_id: string
           orcamento_id: string | null
           parcelas: number
-          parcelas_pagas: number
           total: number
           updated_at: string
           valor_parcela: number
@@ -587,13 +171,11 @@ export type Database = {
           comissao_pct?: number
           created_at?: string
           entrada?: number
-          entrada_paga?: boolean
           financiado?: number
           id?: string
           lead_id: string
           orcamento_id?: string | null
           parcelas?: number
-          parcelas_pagas?: number
           total?: number
           updated_at?: string
           valor_parcela?: number
@@ -603,13 +185,11 @@ export type Database = {
           comissao_pct?: number
           created_at?: string
           entrada?: number
-          entrada_paga?: boolean
           financiado?: number
           id?: string
           lead_id?: string
           orcamento_id?: string | null
           parcelas?: number
-          parcelas_pagas?: number
           total?: number
           updated_at?: string
           valor_parcela?: number
@@ -627,62 +207,6 @@ export type Database = {
             columns: ["orcamento_id"]
             isOneToOne: false
             referencedRelation: "orcamentos"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      fornecedores: {
-        Row: {
-          ativo: boolean
-          categoria_id: string | null
-          chave_pix: string | null
-          cidade: string | null
-          created_at: string
-          documento: string | null
-          email: string | null
-          id: string
-          nome: string
-          observacoes: string | null
-          telefone: string | null
-          tipo_pessoa: string
-          updated_at: string
-        }
-        Insert: {
-          ativo?: boolean
-          categoria_id?: string | null
-          chave_pix?: string | null
-          cidade?: string | null
-          created_at?: string
-          documento?: string | null
-          email?: string | null
-          id?: string
-          nome: string
-          observacoes?: string | null
-          telefone?: string | null
-          tipo_pessoa?: string
-          updated_at?: string
-        }
-        Update: {
-          ativo?: boolean
-          categoria_id?: string | null
-          chave_pix?: string | null
-          cidade?: string | null
-          created_at?: string
-          documento?: string | null
-          email?: string | null
-          id?: string
-          nome?: string
-          observacoes?: string | null
-          telefone?: string | null
-          tipo_pessoa?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fornecedores_categoria_id_fkey"
-            columns: ["categoria_id"]
-            isOneToOne: false
-            referencedRelation: "fin_categorias"
             referencedColumns: ["id"]
           },
         ]
@@ -725,6 +249,7 @@ export type Database = {
           created_at: string
           email: string | null
           etapa: Database["public"]["Enums"]["lead_etapa"]
+          ganho_em: string | null
           id: string
           modelo_id: string | null
           nome: string
@@ -735,12 +260,14 @@ export type Database = {
           updated_at: string
           valor: number
           vendedor_id: string | null
+          versao: number
         }
         Insert: {
           cidade?: string | null
           created_at?: string
           email?: string | null
           etapa?: Database["public"]["Enums"]["lead_etapa"]
+          ganho_em?: string | null
           id?: string
           modelo_id?: string | null
           nome: string
@@ -751,12 +278,14 @@ export type Database = {
           updated_at?: string
           valor?: number
           vendedor_id?: string | null
+          versao?: number
         }
         Update: {
           cidade?: string | null
           created_at?: string
           email?: string | null
           etapa?: Database["public"]["Enums"]["lead_etapa"]
+          ganho_em?: string | null
           id?: string
           modelo_id?: string | null
           nome?: string
@@ -767,6 +296,7 @@ export type Database = {
           updated_at?: string
           valor?: number
           vendedor_id?: string | null
+          versao?: number
         }
         Relationships: [
           {
@@ -871,7 +401,6 @@ export type Database = {
           id: string
           inicio: string | null
           lead_id: string
-          orcamento_id: string | null
           previsao: string | null
           updated_at: string
         }
@@ -882,7 +411,6 @@ export type Database = {
           id?: string
           inicio?: string | null
           lead_id: string
-          orcamento_id?: string | null
           previsao?: string | null
           updated_at?: string
         }
@@ -893,7 +421,6 @@ export type Database = {
           id?: string
           inicio?: string | null
           lead_id?: string
-          orcamento_id?: string | null
           previsao?: string | null
           updated_at?: string
         }
@@ -910,13 +437,6 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: true
             referencedRelation: "leads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "obras_orcamento_id_fkey"
-            columns: ["orcamento_id"]
-            isOneToOne: false
-            referencedRelation: "orcamentos"
             referencedColumns: ["id"]
           },
         ]
@@ -955,7 +475,6 @@ export type Database = {
       }
       orcamentos: {
         Row: {
-          assinado_em: string | null
           cliente_cidade: string
           cliente_email: string
           cliente_nome: string
@@ -977,9 +496,9 @@ export type Database = {
           validade_dias: number
           valor_base: number
           vendedor_id: string | null
+          versao: number
         }
         Insert: {
-          assinado_em?: string | null
           cliente_cidade?: string
           cliente_email?: string
           cliente_nome?: string
@@ -1001,9 +520,9 @@ export type Database = {
           validade_dias?: number
           valor_base?: number
           vendedor_id?: string | null
+          versao?: number
         }
         Update: {
-          assinado_em?: string | null
           cliente_cidade?: string
           cliente_email?: string
           cliente_nome?: string
@@ -1025,6 +544,7 @@ export type Database = {
           validade_dias?: number
           valor_base?: number
           vendedor_id?: string | null
+          versao?: number
         }
         Relationships: [
           {
@@ -1057,40 +577,93 @@ export type Database = {
           },
         ]
       }
+      parcelas: {
+        Row: {
+          created_at: string
+          descricao: string
+          forma_pagamento: string | null
+          id: string
+          lead_id: string
+          numero: number
+          observacao: string | null
+          pago_em: string | null
+          updated_at: string
+          valor: number
+          valor_pago: number
+          vencimento: string
+        }
+        Insert: {
+          created_at?: string
+          descricao?: string
+          forma_pagamento?: string | null
+          id?: string
+          lead_id: string
+          numero: number
+          observacao?: string | null
+          pago_em?: string | null
+          updated_at?: string
+          valor: number
+          valor_pago?: number
+          vencimento: string
+        }
+        Update: {
+          created_at?: string
+          descricao?: string
+          forma_pagamento?: string | null
+          id?: string
+          lead_id?: string
+          numero?: number
+          observacao?: string | null
+          pago_em?: string | null
+          updated_at?: string
+          valor?: number
+          valor_pago?: number
+          vencimento?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parcelas_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       perfis: {
         Row: {
           ativo: boolean
           created_at: string
+          desconto_max: number
           email: string | null
           id: string
-          limites: Json
           nome: string | null
           papel: string
-          permissoes: string[]
+          pode_aprovar: boolean
           updated_at: string
           vendedor_id: string | null
         }
         Insert: {
           ativo?: boolean
           created_at?: string
+          desconto_max?: number
           email?: string | null
           id: string
-          limites?: Json
           nome?: string | null
           papel?: string
-          permissoes?: string[]
+          pode_aprovar?: boolean
           updated_at?: string
           vendedor_id?: string | null
         }
         Update: {
           ativo?: boolean
           created_at?: string
+          desconto_max?: number
           email?: string | null
           id?: string
-          limites?: Json
           nome?: string | null
           papel?: string
-          permissoes?: string[]
+          pode_aprovar?: boolean
           updated_at?: string
           vendedor_id?: string | null
         }
@@ -1111,50 +684,58 @@ export type Database = {
           },
         ]
       }
-      portal_tokens: {
+      proposta_links: {
         Row: {
+          aceito_documento: string | null
+          aceito_em: string | null
+          aceito_ip: string | null
+          aceito_nome: string | null
+          aceito_user_agent: string | null
           acessos: number
-          created_at: string
+          conteudo_hash: string | null
+          criado_em: string
           criado_por: string | null
           expira_em: string
-          lead_id: string | null
-          orcamento_id: string | null
+          orcamento_id: string
           revogado: boolean
           token: string
-          ultimo_acesso: string | null
+          visualizado_em: string | null
         }
         Insert: {
+          aceito_documento?: string | null
+          aceito_em?: string | null
+          aceito_ip?: string | null
+          aceito_nome?: string | null
+          aceito_user_agent?: string | null
           acessos?: number
-          created_at?: string
+          conteudo_hash?: string | null
+          criado_em?: string
           criado_por?: string | null
           expira_em?: string
-          lead_id?: string | null
-          orcamento_id?: string | null
+          orcamento_id: string
           revogado?: boolean
           token?: string
-          ultimo_acesso?: string | null
+          visualizado_em?: string | null
         }
         Update: {
+          aceito_documento?: string | null
+          aceito_em?: string | null
+          aceito_ip?: string | null
+          aceito_nome?: string | null
+          aceito_user_agent?: string | null
           acessos?: number
-          created_at?: string
+          conteudo_hash?: string | null
+          criado_em?: string
           criado_por?: string | null
           expira_em?: string
-          lead_id?: string | null
-          orcamento_id?: string | null
+          orcamento_id?: string
           revogado?: boolean
           token?: string
-          ultimo_acesso?: string | null
+          visualizado_em?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "portal_tokens_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "leads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "portal_tokens_orcamento_id_fkey"
+            foreignKeyName: "proposta_links_orcamento_id_fkey"
             columns: ["orcamento_id"]
             isOneToOne: false
             referencedRelation: "orcamentos"
@@ -1169,6 +750,7 @@ export type Database = {
           endpoint: string
           id: string
           p256dh: string
+          updated_at: string
           user_id: string
         }
         Insert: {
@@ -1177,7 +759,8 @@ export type Database = {
           endpoint: string
           id?: string
           p256dh: string
-          user_id: string
+          updated_at?: string
+          user_id?: string
         }
         Update: {
           auth?: string
@@ -1185,51 +768,43 @@ export type Database = {
           endpoint?: string
           id?: string
           p256dh?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
       }
       tarefas: {
         Row: {
-          concluida_em: string | null
           created_at: string
-          descricao: string | null
           feito: boolean
           id: string
           lead_id: string | null
           push_em: string | null
-          responsavel_id: string | null
           titulo: string
           updated_at: string
-          user_id: string | null
+          user_id: string
           vencimento: string | null
         }
         Insert: {
-          concluida_em?: string | null
           created_at?: string
-          descricao?: string | null
           feito?: boolean
           id?: string
           lead_id?: string | null
           push_em?: string | null
-          responsavel_id?: string | null
           titulo: string
           updated_at?: string
-          user_id?: string | null
+          user_id?: string
           vencimento?: string | null
         }
         Update: {
-          concluida_em?: string | null
           created_at?: string
-          descricao?: string | null
           feito?: boolean
           id?: string
           lead_id?: string | null
           push_em?: string | null
-          responsavel_id?: string | null
           titulo?: string
           updated_at?: string
-          user_id?: string | null
+          user_id?: string
           vencimento?: string | null
         }
         Relationships: [
@@ -1245,7 +820,6 @@ export type Database = {
       vendedores: {
         Row: {
           ativo: boolean
-          comissao_pct: number
           cor: string
           created_at: string
           id: string
@@ -1255,7 +829,6 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean
-          comissao_pct?: number
           cor?: string
           created_at?: string
           id?: string
@@ -1265,7 +838,6 @@ export type Database = {
         }
         Update: {
           ativo?: boolean
-          comissao_pct?: number
           cor?: string
           created_at?: string
           id?: string
@@ -1300,40 +872,10 @@ export type Database = {
     }
     Functions: {
       chamar_funcao_cron: { Args: { p_funcao: string }; Returns: number }
-      eh_service_role: { Args: never; Returns: boolean }
-      fin_recalcular_titulo: { Args: { p_titulo: string }; Returns: undefined }
-      is_admin: { Args: never; Returns: boolean }
-      lead_visivel: { Args: { p_lead: string }; Returns: boolean }
-      limite_num: { Args: { chave: string }; Returns: number }
-      meu_vendedor_id: { Args: never; Returns: string }
-      no_escopo: { Args: { v: string }; Returns: boolean }
-      orcamento_visivel: { Args: { p_orc: string }; Returns: boolean }
-      pode_editar_comercial: { Args: never; Returns: boolean }
-      pode_gerir_titulo: {
-        Args: { p_origem: string; p_tipo: string }
-        Returns: boolean
+      relatorio_comercial: {
+        Args: { p_fim: string; p_inicio: string }
+        Returns: Json
       }
-      pode_ver_lead: {
-        Args: { etapa: Database["public"]["Enums"]["lead_etapa"]; v: string }
-        Returns: boolean
-      }
-      pode_ver_titulo: {
-        Args: { p_origem: string; p_tipo: string; p_vendedor: string }
-        Returns: boolean
-      }
-      tem_alguma_perm: { Args: { ps: string[] }; Returns: boolean }
-      tem_perm: { Args: { p: string }; Returns: boolean }
-      usuario_ativo: { Args: never; Returns: boolean }
-      usuarios_resumo: {
-        Args: never
-        Returns: {
-          ativo: boolean
-          id: string
-          nome: string
-          vendedor_id: string
-        }[]
-      }
-      ve_financeiro: { Args: never; Returns: boolean }
     }
     Enums: {
       lead_etapa:
