@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="PiscinaPro">
+  <defs>
+    <linearGradient id="agua" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6FD3D8"/>
+      <stop offset="100%" stop-color="#12A0A8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#0B1F26"/>
+  <rect x="44" y="44" width="424" height="424" rx="84" fill="url(#agua)" opacity=".16"/>
+  <g fill="none" stroke="url(#agua)" stroke-width="30" stroke-linecap="round">
+    <path d="M104 236V132a56 56 0 0 1 56-56h16a56 56 0 0 1 56 56v104"/>
+    <path d="M336 236V132a56 56 0 0 0-56-56"/>
+  </g>
+  <g fill="none" stroke="#6FD3D8" stroke-width="30" stroke-linecap="round">
+    <path d="M72 320c42 0 42-38 84-38s42 38 84 38 42-38 84-38 42 38 84 38"/>
+    <path d="M72 404c42 0 42-38 84-38s42 38 84 38 42-38 84-38 42 38 84 38" opacity=".5"/>
+  </g>
+</svg>
