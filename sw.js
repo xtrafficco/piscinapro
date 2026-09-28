@@ -11,30 +11,27 @@
    ========================================================================== */
 'use strict';
 
-const VERSAO = 'piscinapro-v11';
+const VERSAO = 'piscinapro-v12';
 
 const CASCO = [
   './',
   './index.html',
-  './css/app.css',
-  './js/vendor/supabase.min.js',
-  './js/core.js',
-  './js/jornal.js',
-  './js/seed.js',
-  './js/auth.js',
-  './js/whats.js',
-  './js/vendas.js',
-  './js/orcamentos.js',
-  './js/erp.js',
-  './js/agenda.js',
-  './js/servicos.js',
-  './js/pdv.js',
-  './js/nuvem.js',
-  './js/dados.js',
-  './js/saas.js',
-  './js/financeiro.js',
-  './js/relatorios.js',
-  './js/main.js',
+  './css/app.7ead8e1b.css',
+  './css/fontes.e11546cf.css',
+  './css/fonts/manrope-400-normal-latin.a30ddcd3.woff2',
+  './css/fonts/manrope-400-normal-latin-ext.3911b66d.woff2',
+  './css/fonts/fraunces-400-normal-latin.7234ed86.woff2',
+  './css/fonts/fraunces-400-normal-latin-ext.a2930b27.woff2',
+  /* só a BASE (todos os papéis). Os módulos de operação são lazy (por papel) e
+     entram no cache sob demanda pela regra cache-first dos assets hasheados. */
+  './js/vendor/supabase.min.fbde52aa.js',
+  './js/core.14bf2bea.js',
+  './js/jornal.858ffa4b.js',
+  './js/nuvem.e14cde99.js',
+  './js/auth.23932763.js',
+  './js/saas.b36ea393.js',
+  './js/dados.a1ac3007.js',
+  './js/main.cc4d5fdf.js',
   './icone.svg',
   './manifest.webmanifest'
 ];
@@ -66,28 +63,34 @@ self.addEventListener('fetch', ev => {
      podem conter dados da empresa e nunca entram no cache do app. */
   if (url.origin === self.location.origin && url.pathname.startsWith('/sb/')) return;
 
-  /* Fontes do Google: tenta a rede, guarda o que vier, cai no cache se faltar. */
-  if (url.hostname.endsWith('googleapis.com') || url.hostname.endsWith('gstatic.com')) {
-    ev.respondWith(
-      fetch(req).then(res => {
-        const copia = res.clone();
-        caches.open(VERSAO).then(c => c.put(req, copia));
-        return res;
-      }).catch(() => caches.match(req))
-    );
-    return;
-  }
-
   /* chamadas à nuvem nunca passam pelo cache */
   if (url.hostname.endsWith('supabase.co')) return;
 
   if (url.origin !== self.location.origin) return;
 
-  /* Casco do app: REDE PRIMEIRO, cache como rede de segurança.
-     Cache primeiro seria mais rápido, mas num ERP servir um .js velho significa
-     cálculo errado em silêncio — e, em desenvolvimento, editar um arquivo e não
-     ver a mudança. A diferença de velocidade aqui é desprezível; a de correção,
-     não. Offline continua funcionando: se a rede falha, responde do cache. */
+  /* Assets com content-hash no nome (….a1b2c3d4.js/.css/.woff2) são IMUTÁVEIS:
+     mudou o conteúdo, mudou o nome. Aí CACHE PRIMEIRO é seguro e rápido — nunca
+     serve algo "velho", porque um deploy novo pede nomes novos. Em produção o
+     preparar-publicacao.js gera esses nomes; em desenvolvimento os arquivos não
+     têm hash e caem na regra de baixo (rede primeiro), preservando o F5. */
+  if (/\.[0-9a-f]{8}\.(?:js|css|woff2)$/.test(url.pathname)) {
+    ev.respondWith(
+      caches.match(req).then(cacheado => cacheado || fetch(req).then(res => {
+        if (res && res.status === 200 && res.type === 'basic') {
+          const copia = res.clone();
+          caches.open(VERSAO).then(c => c.put(req, copia));
+        }
+        return res;
+      }))
+    );
+    return;
+  }
+
+  /* Resto do casco (index.html, sw, ícones): REDE PRIMEIRO, cache como rede de
+     segurança. O index.html é quem aponta para os hashes, então tem de vir
+     sempre fresco. Servir um index velho manteria hashes antigos — e, em
+     desenvolvimento, editar um arquivo e não ver a mudança. Offline segue: se a
+     rede falha, responde do cache. */
   ev.respondWith(
     fetch(req)
       .then(res => {

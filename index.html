@@ -11,12 +11,32 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="PiscinaPro">
 <title>PiscinaPro — Gestão &amp; Vendas</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css">
+<link rel="preload" href="css/fonts/manrope-400-normal-latin.a30ddcd3.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="css/fonts/fraunces-400-normal-latin.7234ed86.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/fontes.e11546cf.css">
+<link rel="stylesheet" href="css/app.7ead8e1b.css">
+<style>
+/* Esqueleto de abertura: pintado ANTES do app.css e do JS, cobre o branco
+   enquanto a sessão resolve. main.js remove #boot ao mostrar login ou app. */
+#boot{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:18px;background:#0B1F26;color:#dCEAF0;
+  font-family:system-ui,sans-serif}
+#boot .spin{width:38px;height:38px;border-radius:50%;border:3px solid rgba(255,255,255,.18);
+  border-top-color:#12A0A8;animation:boot-gira .8s linear infinite}
+#boot p{margin:0;font-size:13px;letter-spacing:.04em;opacity:.75}
+#boot strong{font-size:20px;font-weight:700;letter-spacing:.01em}
+#boot em{color:#12A0A8;font-style:normal}
+@keyframes boot-gira{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){#boot .spin{animation:none}}
+</style>
 </head>
 <body>
+
+<div id="boot" role="status" aria-live="polite" aria-label="Carregando o PiscinaPro">
+  <strong>Piscina<em>Pro</em></strong>
+  <div class="spin" aria-hidden="true"></div>
+  <p>Carregando…</p>
+</div>
 
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
   <symbol id="i-dash" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="8" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="11" width="7" height="10" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></symbol>
@@ -114,23 +134,17 @@
 <div id="overlays"></div>
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 
-<script src="js/vendor/supabase.min.js"></script>
-<script src="js/core.js"></script>
-<script src="js/jornal.js"></script>
-<script src="js/seed.js"></script>
-<script src="js/auth.js"></script>
-<script src="js/whats.js"></script>
-<script src="js/vendas.js"></script>
-<script src="js/orcamentos.js"></script>
-<script src="js/erp.js"></script>
-<script src="js/agenda.js"></script>
-<script src="js/servicos.js"></script>
-<script src="js/pdv.js"></script>
-<script src="js/financeiro.js"></script>
-<script src="js/relatorios.js"></script>
-<script src="js/nuvem.js"></script>
-<script src="js/saas.js"></script>
-<script src="js/dados.js"></script>
-<script src="js/main.js"></script>
+<!-- Módulos de operação (só do tenant): carregados sob demanda após o login por
+     PP.carregarLazy — o provedor não baixa nenhum deles. Os caminhos abaixo são
+     reescritos para os nomes com hash no preparar-publicacao.js. -->
+<script>window.PP_MODULOS_LAZY={"seed":"js/seed.f1ca22ed.js","whats":"js/whats.3400278b.js","vendas":"js/vendas.cdcc8547.js","orcamentos":"js/orcamentos.cc8f8f19.js","erp":"js/erp.ffd1bff1.js","agenda":"js/agenda.ec0ac9d2.js","servicos":"js/servicos.1237072c.js","pdv":"js/pdv.19a090d0.js","financeiro":"js/financeiro.061d9864.js","relatorios":"js/relatorios.8b9db860.js"};</script>
+<script src="js/vendor/supabase.min.fbde52aa.js"></script>
+<script src="js/core.14bf2bea.js"></script>
+<script src="js/jornal.858ffa4b.js"></script>
+<script src="js/nuvem.e14cde99.js"></script>
+<script src="js/auth.23932763.js"></script>
+<script src="js/saas.b36ea393.js"></script>
+<script src="js/dados.a1ac3007.js"></script>
+<script src="js/main.cc4d5fdf.js"></script>
 </body>
 </html>
