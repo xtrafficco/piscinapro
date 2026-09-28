@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/sb/:path*",
-      "destination": "https://xxhsyzzcwhtnwljlgops.supabase.co/:path*"
+      "destination": "https://gvgflpartqdehhmyhilh.supabase.co/:path*"
     }
   ],
   "headers": [
@@ -15,7 +15,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://xxhsyzzcwhtnwljlgops.supabase.co; connect-src 'self' https://xxhsyzzcwhtnwljlgops.supabase.co wss://xxhsyzzcwhtnwljlgops.supabase.co; frame-src 'self' blob:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://gvgflpartqdehhmyhilh.supabase.co; connect-src 'self' https://gvgflpartqdehhmyhilh.supabase.co wss://gvgflpartqdehhmyhilh.supabase.co; frame-src 'self' blob:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
         },
         {
           "key": "X-Content-Type-Options",
@@ -73,7 +73,7 @@
       ]
     },
     {
-      "source": "/manifest.json",
+      "source": "/manifest.webmanifest",
       "headers": [
         {
           "key": "Content-Type",

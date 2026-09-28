@@ -9,12 +9,34 @@ const esc = PP.esc;
 
 /* ============================== BOOT ============================== */
 
+/* Coletor de diagnóstico: guarda os últimos erros em memória para o próprio
+   usuário exportar. Sem servidor de telemetria, é o mínimo que dá visibilidade
+   de falha em campo — e nada sai sozinho, quem baixa é a pessoa. */
+const DIAG_MAX = 50;
+PP.diagnostico = [];
+PP.registrarDiag = (tipo, msg) => {
+  PP.diagnostico.push({ quando:new Date().toISOString(), tipo, rota:location.hash || '#/',
+    msg:String(msg == null ? '' : (msg.stack || msg.message || msg)).slice(0, 500) });
+  if (PP.diagnostico.length > DIAG_MAX) PP.diagnostico.shift();
+};
+PP.baixarDiagnostico = () => {
+  const u = PP.usuario() || {};
+  const info = { gerado:new Date().toISOString(), usuario:u.nome || '—', papel:u.papel || '—',
+    empresa:(PP.cfg() || {}).empresa || '—', navegador:navigator.userAgent, online:navigator.onLine,
+    gravacao:PP.gravacao || {}, erros:PP.diagnostico };
+  PP.baixar('diagnostico-' + PP.hoje() + '.json', JSON.stringify(info, null, 2), 'application/json');
+  PP.toast('Diagnóstico baixado', 'ok');
+};
+PP.on('baixarDiagnostico', () => PP.baixarDiagnostico());
+
 /* Rede de segurança: erro que escape de tudo ainda avisa em vez de sumir. */
 window.addEventListener('error', ev => {
+  PP.registrarDiag('erro', ev.error || ev.message);
   console.error('[PP] erro não tratado', ev.error || ev.message);
   if (PP.toast) PP.toast('Algo deu errado nesta ação. Se repetir, faça um backup e recarregue a página.', 'err');
 });
 window.addEventListener('unhandledrejection', ev => {
+  PP.registrarDiag('promessa', ev.reason);
   console.error('[PP] promessa rejeitada sem tratamento', ev.reason);
   if (PP.toast) PP.toast('Algo deu errado nesta ação. Se repetir, faça um backup e recarregue a página.', 'err');
 });

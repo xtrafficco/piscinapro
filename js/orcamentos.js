@@ -433,9 +433,11 @@ function addProduto(id) {
   } else {
     ED.itens.push({ produtoId:p.id, nome:p.nome, qtd:1, preco:PP.n(p.preco), custo:PP.n(p.custo) });
     /* ao escolher uma piscina, já sugere a instalação */
-    if (p.categoria === 'Piscina' && !ED.itens.some(i => i.produtoId === 'sv1')) {
+    if (p.categoria === 'Piscina') {
       const inst = PP.all('produtos').find(x => x.sku === 'SRV-INS-PAD');
-      if (inst) ED.itens.push({ produtoId:inst.id, nome:inst.nome, qtd:1, preco:PP.n(inst.preco), custo:PP.n(inst.custo) });
+      if (inst && !ED.itens.some(i => i.produtoId === inst.id)) {
+        ED.itens.push({ produtoId:inst.id, nome:inst.nome, qtd:1, preco:PP.n(inst.preco), custo:PP.n(inst.custo) });
+      }
     }
   }
   repintarItens();

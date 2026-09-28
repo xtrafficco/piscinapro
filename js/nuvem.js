@@ -22,9 +22,9 @@ const PP = window.PP;
 /* Endereço e chave publicável do projeto. Ficam no código de propósito: a
    chave é pública por desenho (quem manda é a política do banco) e assim
    nenhum computador novo precisa ser configurado à mão para começar. */
-const URL_SUPABASE = 'https://xxhsyzzcwhtnwljlgops.supabase.co';
+const URL_SUPABASE = 'https://gvgflpartqdehhmyhilh.supabase.co';
 const URL_PROJETO = location.protocol === 'https:' ? location.origin + '/sb' : URL_SUPABASE;
-const CHAVE_PUB   = 'sb_publishable_ah2Onhgbdu08ztYPOnau4Q_gUHD3iNi';
+const CHAVE_PUB   = 'sb_publishable_T2DaTRLY83RfBVURte_NIg_cjAw8GGT';
 
 const PAGINA = 1000;   /* o PostgREST devolve no máximo 1000 por vez */
 

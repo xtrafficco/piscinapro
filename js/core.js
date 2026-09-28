@@ -909,6 +909,7 @@ PP.run = (nome, el, ev) => {
   const fn = ACTS[nome];
   if (!fn) { console.warn('[PP] ação não registrada:', nome); return; }
   const falhou = e => {
+    if (PP.registrarDiag) PP.registrarDiag('acao:' + nome, e);
     console.error('[PP] erro na ação "' + nome + '"', e);
     PP.toast('Erro em "' + nome + '": ' + (e && e.message ? e.message : e), 'err');
   };
